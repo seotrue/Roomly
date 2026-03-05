@@ -1,0 +1,103 @@
+@use 'variables' as *;
+
+// ============================================================
+// CSS 변수 주입 (런타임에서 접근 가능)
+// ============================================================
+:root {
+  @each $name, $value in $css-variables {
+    #{$name}: #{$value};
+  }
+}
+
+// ============================================================
+// 리셋
+// ============================================================
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+// ============================================================
+// 기본 스타일
+// ============================================================
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: $font-family-base;
+  font-size: $font-size-base;
+  line-height: $line-height-normal;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// ============================================================
+// 타이포그래피
+// ============================================================
+h1, h2, h3, h4, h5, h6 {
+  font-weight: $font-weight-semibold;
+  line-height: $line-height-tight;
+  color: var(--color-text-primary);
+}
+
+p {
+  line-height: $line-height-normal;
+  color: var(--color-text-secondary);
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// ============================================================
+// 미디어
+// ============================================================
+img,
+video {
+  max-width: 100%;
+  display: block;
+}
+
+// ============================================================
+// 폼 요소 기본값 제거
+// ============================================================
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+// ============================================================
+// 유틸리티
+// ============================================================
+
+// 스크린 리더 전용 (시각적으로 숨김)
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

@@ -1,0 +1,198 @@
+@use 'variables' as *;
+
+// ============================================================
+// 반응형
+// ============================================================
+
+@mixin respond-to($breakpoint) {
+  @if $breakpoint == sm {
+    @media (min-width: #{$breakpoint-sm}) { @content; }
+  } @else if $breakpoint == md {
+    @media (min-width: #{$breakpoint-md}) { @content; }
+  } @else if $breakpoint == lg {
+    @media (min-width: #{$breakpoint-lg}) { @content; }
+  } @else if $breakpoint == xl {
+    @media (min-width: #{$breakpoint-xl}) { @content; }
+  } @else if $breakpoint == 2xl {
+    @media (min-width: #{$breakpoint-2xl}) { @content; }
+  }
+}
+
+// 모바일 우선이 아닌 경우 (max-width)
+@mixin respond-below($breakpoint) {
+  @if $breakpoint == sm {
+    @media (max-width: #{$breakpoint-sm - 1px}) { @content; }
+  } @else if $breakpoint == md {
+    @media (max-width: #{$breakpoint-md - 1px}) { @content; }
+  } @else if $breakpoint == lg {
+    @media (max-width: #{$breakpoint-lg - 1px}) { @content; }
+  } @else if $breakpoint == xl {
+    @media (max-width: #{$breakpoint-xl - 1px}) { @content; }
+  }
+}
+
+// ============================================================
+// Flexbox 헬퍼
+// ============================================================
+
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@mixin flex-col-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+// ============================================================
+// 텍스트 말줄임
+// ============================================================
+
+@mixin truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@mixin line-clamp($lines) {
+  display: -webkit-box;
+  -webkit-line-clamp: $lines;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+// ============================================================
+// 버튼 기반 스타일
+// ============================================================
+
+@mixin button-reset {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+@mixin button-base {
+  @include button-reset;
+  @include flex-center;
+  gap: $spacing-2;
+  padding: $spacing-3 $spacing-5;
+  border-radius: $border-radius-md;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  transition: background-color $transition-fast, opacity $transition-fast;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// 아이콘 버튼 (원형)
+@mixin icon-button($size: 44px) {
+  @include button-reset;
+  @include flex-center;
+  width: $size;
+  height: $size;
+  border-radius: $border-radius-full;
+  transition: background-color $transition-fast, transform $transition-fast;
+
+  &:hover:not(:disabled) {
+    transform: scale(1.05);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ============================================================
+// 포커스 링 (접근성)
+// ============================================================
+
+@mixin focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--color-border-focus);
+    outline-offset: 2px;
+  }
+}
+
+// ============================================================
+// 카드/패널
+// ============================================================
+
+@mixin surface {
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: $border-radius-lg;
+}
+
+// ============================================================
+// 입력 필드
+// ============================================================
+
+@mixin input-base {
+  width: 100%;
+  padding: $spacing-3 $spacing-4;
+  background-color: var(--color-bg-overlay);
+  border: 1px solid var(--color-border);
+  border-radius: $border-radius-md;
+  color: var(--color-text-primary);
+  font-size: $font-size-base;
+  font-family: inherit;
+  transition: border-color $transition-fast;
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ============================================================
+// 비디오 타일 오버레이
+// ============================================================
+
+@mixin video-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+// ============================================================
+// 전체 화면 채우기
+// ============================================================
+
+@mixin fill-screen {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
