@@ -1,8 +1,8 @@
 # Roomly 프로젝트
 
 ## 프로젝트 개요
-Roomly는 Google Meet과 같은 그룹 화상회의 웹 애플리케이션입니다.
-WebRTC 기술을 직접 구현하여 학습하는 것이 주요 목표입니다.
+Roomly는 Google Meet과 같은 프로덕션 수준의 그룹 화상회의 웹 애플리케이션입니다.
+WebRTC 기술을 브라우저 네이티브 API로 직접 구현합니다.
 
 ## 기술 스택
 - **Framework**: Next.js (App Router) + TypeScript

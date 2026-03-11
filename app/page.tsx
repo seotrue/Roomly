@@ -54,7 +54,7 @@ export default function HomePage() {
     }
 
     const targetRoomId = mode === 'create' ? generateRoomId() : trimmedRoom;
-    router.push(`/room/${targetRoomId}?name=${encodeURIComponent(trimmedName)}`);
+    router.push(`/room/${targetRoomId}?name=${encodeURIComponent(trimmedName)}&mode=${mode}`);
   };
 
   return (

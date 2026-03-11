@@ -9,6 +9,8 @@ export default function RoomPage() {
 
   const roomId = params.roomId as string;
   const userName = searchParams.get('name') ?? '익명';
+  // useSocket hook 구현 시 join-room payload에 전달 (현재 미사용)
+  void searchParams.get('mode');
 
   return (
     <div className="room-container">
