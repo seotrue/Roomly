@@ -2,90 +2,105 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { createRoom, checkRoomExists } from '@/features/home/api/room';
+import {
+  type RoomMode,
+  type HomeFormErrors,
+  sanitizeRoomIdInput,
+  normalizeRoomId,
+  validateHomeForm,
+  buildRoomUrl,
+} from '@/features/home/model/home-form';
 import '@/styles/home.scss';
-
-function generateRoomId(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  return Array.from({ length: 8 }, () =>
-    chars[Math.floor(Math.random() * chars.length)]
-  ).join('');
-}
 
 export default function HomePage() {
   const router = useRouter();
+
   const [userName, setUserName] = useState('');
   const [roomId, setRoomId] = useState('');
-  const [mode, setMode] = useState<'create' | 'join'>('create');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [mode, setMode] = useState<RoomMode>('create');
+  const [errors, setErrors] = useState<HomeFormErrors>({});
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleModeChange = (nextMode: RoomMode) => {
+    setMode(nextMode);
+    setErrors({});
+    setErrorMessage('');
+    if (nextMode === 'create') {
+      setRoomId('');
+    }
+  };
+
+  const handleRoomIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRoomId(sanitizeRoomIdInput(e.target.value));
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError('');
+    setErrorMessage('');
 
-    const trimmedName = userName.trim();
-    const trimmedRoom = roomId.trim();
+    const values = { userName, roomId, mode };
+    const validationErrors = validateHomeForm(values);
 
-    if (!trimmedName) {
-      setError('이름을 입력해주세요.');
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
       return;
     }
 
-    if (mode === 'join') {
-      if (!trimmedRoom) {
-        setError('방 ID를 입력해주세요.');
+    setErrors({});
+    setIsSubmitting(true);
+
+    if (mode === 'create') {
+      const result = await createRoom();
+      setIsSubmitting(false);
+
+      if (!result.success) {
+        setErrorMessage(result.errorMessage);
         return;
       }
 
-      setIsLoading(true);
-      try {
-        const res = await fetch(`/api/rooms/${trimmedRoom}`);
-        const data = await res.json() as { exists: boolean };
-        if (!data.exists) {
-          setError('존재하지 않는 방입니다.');
-          return;
-        }
-      } catch {
-        setError('서버 연결에 실패했습니다.');
-        return;
-      } finally {
-        setIsLoading(false);
-      }
+      router.push(buildRoomUrl(values, result.roomId));
+      return;
     }
 
-    const targetRoomId = mode === 'create' ? generateRoomId() : trimmedRoom;
-    router.push(`/room/${targetRoomId}?name=${encodeURIComponent(trimmedName)}&mode=${mode}`);
+    const result = await checkRoomExists(roomId);
+    setIsSubmitting(false);
+
+    if (!result.exists) {
+      setErrorMessage(result.errorMessage);
+      return;
+    }
+
+    router.push(buildRoomUrl(values, normalizeRoomId(roomId)));
   };
 
   return (
     <div className="home-container">
       <div className="home-card">
-        {/* 로고 */}
         <div className="home-logo">
           <div className="home-logo-icon">R</div>
           <h1 className="home-logo-text">Roomly</h1>
         </div>
         <p className="home-subtitle">무료 그룹 화상회의</p>
 
-        {/* 탭 */}
         <div className="home-tabs">
           <button
             type="button"
             className={`home-tab ${mode === 'create' ? 'home-tab--active' : ''}`}
-            onClick={() => { setMode('create'); setError(''); }}
+            onClick={() => handleModeChange('create')}
           >
             방 만들기
           </button>
           <button
             type="button"
             className={`home-tab ${mode === 'join' ? 'home-tab--active' : ''}`}
-            onClick={() => { setMode('join'); setError(''); }}
+            onClick={() => handleModeChange('join')}
           >
             방 입장
           </button>
         </div>
 
-        {/* 폼 */}
         <form className="home-form" onSubmit={handleSubmit}>
           <div className="home-field">
             <label className="home-label" htmlFor="userName">
@@ -101,6 +116,9 @@ export default function HomePage() {
               maxLength={20}
               autoComplete="off"
             />
+            {errors.userName && (
+              <p className="home-error">{errors.userName}</p>
+            )}
           </div>
 
           {mode === 'join' && (
@@ -114,21 +132,30 @@ export default function HomePage() {
                 type="text"
                 placeholder="초대받은 방 ID를 입력하세요"
                 value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
+                onChange={handleRoomIdChange}
                 maxLength={20}
                 autoComplete="off"
               />
+              {errors.roomId && (
+                <p className="home-error">{errors.roomId}</p>
+              )}
             </div>
           )}
 
-          {error && <p className="home-error">{error}</p>}
+          {errorMessage && (
+            <p className="home-error">{errorMessage}</p>
+          )}
 
           <button
             type="submit"
             className="home-submit"
-            disabled={isLoading}
+            disabled={isSubmitting}
           >
-            {isLoading ? '확인 중...' : mode === 'create' ? '방 만들기' : '입장하기'}
+            {isSubmitting
+              ? '확인 중...'
+              : mode === 'create'
+                ? '방 만들기'
+                : '입장하기'}
           </button>
         </form>
       </div>
