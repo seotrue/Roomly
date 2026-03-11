@@ -1,6 +1,6 @@
 import { roomStore } from './room-store';
-import { normalizeRoomId, isValidRoomId, isValidUserName } from './room-utils';
-import type { JoinRoomPayload, JoinRoomResult, RoomParticipant } from './room-types';
+import { normalizeRoomId, isValidRoomId, isValidUserName, generateRoomId } from './room-utils';
+import type { JoinRoomPayload, JoinRoomResult, RoomParticipant, CreateRoomResult } from './room-types';
 
 // join-room 정책 처리
 // - create 모드: 방이 없으면 생성 후 입장, 있으면 그냥 입장
@@ -89,4 +89,19 @@ export function arePeersInSameRoom(socketIdA: string, socketIdB: string): boolea
   const roomIdA = roomStore.getUser(socketIdA)?.roomId;
   const roomIdB = roomStore.getUser(socketIdB)?.roomId;
   return roomIdA !== undefined && roomIdA === roomIdB;
+}
+
+// REST API용: 고유한 roomId를 생성하고 빈 방을 미리 등록한다
+// 충돌 시 최대 5회 재시도하며, 모두 실패하면 에러를 throw한다
+export function handleCreateRoom(): CreateRoomResult {
+  const MAX_RETRIES = 5;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const roomId = generateRoomId();
+    if (!roomStore.hasRoom(roomId)) {
+      roomStore.createRoom(roomId);
+      console.log(`[room] pre-created: ${roomId}`);
+      return { roomId };
+    }
+  }
+  throw new Error('[room] failed to generate unique roomId after max retries');
 }

@@ -24,3 +24,8 @@ export type JoinRoomPayload = {
 export type JoinRoomResult =
   | { success: true; existingParticipants: RoomParticipant[] }
   | { success: false; errorMessage: string };
+
+// POST /api/rooms 응답 결과
+export type CreateRoomResult = {
+  roomId: string;
+};

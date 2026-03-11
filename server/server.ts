@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import next from 'next';
-import { handleJoinRoom, handleLeaveRoom, getRoomInfo, getSocketRoomId, arePeersInSameRoom } from './room/room-service';
+import { handleJoinRoom, handleLeaveRoom, getRoomInfo, getSocketRoomId, arePeersInSameRoom, handleCreateRoom } from './room/room-service';
 import { normalizeRoomId } from './room/room-utils';
 import type { JoinRoomPayload } from './room/room-types';
 
@@ -36,6 +36,16 @@ nextApp.prepare().then(() => {
     }
 
     res.json(roomInfo);
+  });
+
+  expressApp.post('/api/rooms', (_req, res) => {
+    try {
+      const result = handleCreateRoom();
+      res.status(201).json(result);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: '방을 생성할 수 없습니다.' });
+    }
   });
 
   // ─────────────────────────────────────────
