@@ -202,6 +202,91 @@ socket.on('room-joined', (participants: RoomParticipant[]) => { ... });
 
 ---
 
+## REST API 명세
+
+| 메서드 | 경로 | 요청 | 응답 | 역할 |
+|---|---|---|---|---|
+| `POST` | `/api/rooms` | — | `{ roomId: string }` | 서버에서 고유 roomId 생성 + 빈 방 등록 |
+| `GET` | `/api/rooms/:roomId` | — | `{ exists: boolean, participantCount: number }` | 방 존재 여부 확인 |
+
+### 방 만들기 vs 방 입장 API 흐름
+
+```
+[방 만들기]
+  POST /api/rooms
+    → 서버: generateRoomId() 최대 5회 시도 (충돌 방지)
+    → 서버: roomStore.createRoom(roomId) — 빈 방 미리 등록
+    → 응답: { roomId: 'abc123xy' }
+    → router.push('/room/abc123xy?name=...&mode=create')
+
+[방 입장]
+  GET /api/rooms/:roomId
+    → 존재하지 않으면 → 에러 메시지 표시
+    → 존재하면 → router.push('/room/:roomId?name=...&mode=join')
+```
+
+---
+
+## 사용자 액션 플로우
+
+### 홈 페이지 (app/page.tsx)
+
+```
+방 만들기 탭
+  이름 입력 → 방 만들기 버튼
+    → validateHomeForm (이름 비어있으면 필드 에러)
+    → POST /api/rooms → { roomId } 수신
+    → router.push(/room/[roomId]?name=...&mode=create)
+
+방 입장 탭
+  이름 + 방 ID 입력 → 입장하기 버튼
+    → validateHomeForm (이름/방ID 비어있으면 필드 에러)
+    → GET /api/rooms/:roomId
+        ├─ 없음 → errorMessage 표시
+        └─ 있음 → router.push(/room/[roomId]?name=...&mode=join)
+
+공통 UX
+  방 ID 입력 중 → sanitizeRoomIdInput (영소문자+숫자 외 자동 차단)
+  모드 탭 전환 → 에러 초기화 (create 전환 시 roomId도 초기화)
+  버튼 클릭 후 → isSubmitting=true → 버튼 비활성화 + "확인 중..."
+```
+
+### 방 페이지 마운트 (app/room/[roomId]/page.tsx)
+
+```
+1. getUserMedia() → 카메라/마이크 권한 요청
+     실패 → 에러 표시, 이후 흐름 중단
+
+2. localStream 확보 완료 후
+   socket.emit('join-room', {
+     roomId,    // URL /room/[roomId]
+     userName,  // URL ?name=
+     joinMode,  // URL ?mode= ('create'|'join')
+   })
+
+3. room-joined([기존참가자목록]) 수신
+   → store.setParticipants(목록)
+   → "방에 이미 있는 사람들 파악, offer 대기"
+
+4. user-joined(socketId, userName) 수신  ← 기존 참가자들이 받는 이벤트
+   → store.addParticipant
+   → createPeerConnection(socketId)
+   → offer 생성 → 신규 참가자에게 전송
+```
+
+---
+
+## Socket.io emit 패턴
+
+| 코드 | 대상 | 설명 |
+|---|---|---|
+| `socket.emit(이벤트, data)` | 나(현재 소켓)에게만 | 서버 → 특정 클라이언트 |
+| `socket.to(roomId).emit(...)` | 나 제외 방 전체 | 서버 → 방의 나머지 |
+| `io.to(socketId).emit(...)` | 특정 한 명 | 서버 → 지정 소켓 |
+| `socket.on(이벤트, cb)` | 받는 쪽 | 이벤트 수신 핸들러 |
+
+---
+
 ## Socket.io 이벤트 명세 (현행)
 
 ### Client → Server
