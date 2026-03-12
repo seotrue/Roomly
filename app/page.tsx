@@ -1,79 +1,27 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { createRoom, checkRoomExists } from '@/features/home/api/room';
-import {
-  type RoomMode,
-  type HomeFormErrors,
-  sanitizeRoomIdInput,
-  normalizeRoomId,
-  validateHomeForm,
-  buildRoomUrl,
-} from '@/features/home/model/home-form';
+import { useHomeForm } from '@/features/home/hooks/useHomeForm';
+import { FormField } from '@/components/FormField';
 import '@/styles/home.scss';
 
 export default function HomePage() {
-  const router = useRouter();
+  const {
+    userName,
+    roomId,
+    mode,
+    errors,
+    isSubmitting,
+    handleUserNameChange,
+    handleModeChange,
+    handleRoomIdChange,
+    handleSubmit,
+  } = useHomeForm();
 
-  const [userName, setUserName] = useState('');
-  const [roomId, setRoomId] = useState('');
-  const [mode, setMode] = useState<RoomMode>('create');
-  const [errors, setErrors] = useState<HomeFormErrors>({});
-  const [errorMessage, setErrorMessage] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleModeChange = (nextMode: RoomMode) => {
-    setMode(nextMode);
-    setErrors({});
-    setErrorMessage('');
-    if (nextMode === 'create') {
-      setRoomId('');
-    }
-  };
-
-  const handleRoomIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setRoomId(sanitizeRoomIdInput(e.target.value));
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setErrorMessage('');
-
-    const values = { userName, roomId, mode };
-    const validationErrors = validateHomeForm(values);
-
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-
-    setErrors({});
-    setIsSubmitting(true);
-
-    if (mode === 'create') {
-      const result = await createRoom();
-      setIsSubmitting(false);
-
-      if (!result.success) {
-        setErrorMessage(result.errorMessage);
-        return;
-      }
-
-      router.push(buildRoomUrl(values, result.roomId));
-      return;
-    }
-
-    const result = await checkRoomExists(roomId);
-    setIsSubmitting(false);
-
-    if (!result.exists) {
-      setErrorMessage(result.errorMessage);
-      return;
-    }
-
-    router.push(buildRoomUrl(values, normalizeRoomId(roomId)));
-  };
+  const submitButtonText = isSubmitting
+    ? '확인 중...'
+    : mode === 'create'
+      ? '방 만들기'
+      : '입장하기';
 
   return (
     <div className="home-container">
@@ -102,60 +50,36 @@ export default function HomePage() {
         </div>
 
         <form className="home-form" onSubmit={handleSubmit}>
-          <div className="home-field">
-            <label className="home-label" htmlFor="userName">
-              이름
-            </label>
-            <input
-              id="userName"
-              className="home-input"
-              type="text"
-              placeholder="사용할 이름을 입력하세요"
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
-              maxLength={20}
-              autoComplete="off"
-            />
-            {errors.userName && (
-              <p className="home-error">{errors.userName}</p>
-            )}
-          </div>
+          <FormField
+            id="userName"
+            label="이름"
+            placeholder="사용할 이름을 입력하세요"
+            value={userName}
+            error={errors.userName}
+            maxLength={20}
+            onChange={handleUserNameChange}
+          />
 
           {mode === 'join' && (
-            <div className="home-field">
-              <label className="home-label" htmlFor="roomId">
-                방 ID
-              </label>
-              <input
-                id="roomId"
-                className="home-input"
-                type="text"
-                placeholder="초대받은 방 ID를 입력하세요"
-                value={roomId}
-                onChange={handleRoomIdChange}
-                maxLength={20}
-                autoComplete="off"
-              />
-              {errors.roomId && (
-                <p className="home-error">{errors.roomId}</p>
-              )}
-            </div>
+            <FormField
+              id="roomId"
+              label="방 ID"
+              placeholder="초대받은 방 ID를 입력하세요"
+              value={roomId}
+              error={errors.roomId}
+              maxLength={20}
+              onChange={handleRoomIdChange}
+            />
           )}
 
-          {errorMessage && (
-            <p className="home-error">{errorMessage}</p>
-          )}
+          {errors.form && <p className="home-error">{errors.form}</p>}
 
           <button
             type="submit"
             className="home-submit"
             disabled={isSubmitting}
           >
-            {isSubmitting
-              ? '확인 중...'
-              : mode === 'create'
-                ? '방 만들기'
-                : '입장하기'}
+            {submitButtonText}
           </button>
         </form>
       </div>

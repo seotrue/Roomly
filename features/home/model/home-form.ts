@@ -13,6 +13,7 @@ export type HomeFormValues = {
 export type HomeFormErrors = {
   userName?: string;
   roomId?: string;
+  form?: string;  // API 에러 등 폼 전체 레벨 에러
 };
 
 // ─────────────────────────────────────────────
