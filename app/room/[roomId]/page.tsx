@@ -1,31 +1,122 @@
 'use client';
 
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { useMedia } from '@/hooks/useMedia';
+import { useWebRTC } from '@/hooks/useWebRTC';
+import { useSocket } from '@/hooks/useSocket';
+import { useParticipantStore } from '@/store/room/participantStore';
+import { useConnectionStore } from '@/store/room/connectionStore';
+import { useMediaStore } from '@/store/room/mediaStore';
 import '@/styles/room.scss';
 
 export default function RoomPage() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const roomId = params.roomId as string;
   const userName = searchParams.get('name') ?? '익명';
-  // useSocket hook 구현 시 join-room payload에 전달 (현재 미사용)
-  void searchParams.get('mode');
+  const joinMode = (searchParams.get('mode') ?? 'join') as 'create' | 'join';
+
+  // ── 미디어 스트림 획득 ──────────────────────
+  const { localStream } = useMedia();
+
+  // ── WebRTC (sendOffer 등은 useSocket 초기화 후 주입) ─
+  const {
+    handleRoomJoined,
+    handleOffer,
+    handleAnswer,
+    handleIceCandidate,
+    cleanupPeer,
+    cleanupAllPeers,
+  } = useWebRTC({
+    localStream,
+    // sendOffer/sendAnswer/sendIceCandidate는 useSocket에서 반환된 함수로 교체 필요.
+    // 순환 참조를 피하기 위해 socket ref를 직접 넘기는 대신,
+    // useSocket이 반환한 함수를 바인딩 후 사용한다.
+    sendOffer: (targetId, offer) => sendOffer(targetId, offer),
+    sendAnswer: (targetId, answer) => sendAnswer(targetId, answer),
+    sendIceCandidate: (targetId, candidate) => sendIceCandidate(targetId, candidate),
+  });
+
+  // ── 소켓 연결 + 시그널링 이벤트 바인딩 ─────
+  const { sendOffer, sendAnswer, sendIceCandidate } = useSocket({
+    roomId,
+    userName,
+    joinMode,
+    onRoomJoined: handleRoomJoined,
+    onUserLeft: (socketId) => cleanupPeer(socketId),
+    onOffer: handleOffer,
+    onAnswer: handleAnswer,
+    onIceCandidate: handleIceCandidate,
+  });
+
+  // ── store 구독 (렌더링용) ───────────────────
+  const participants = useParticipantStore((state) =>
+    Array.from(state.participants.values()),
+  );
+  const connectionStatus = useConnectionStore((state) => state.connectionStatus);
+  const { isAudioEnabled, isVideoEnabled } = useMediaStore((state) => ({
+    isAudioEnabled: state.isAudioEnabled,
+    isVideoEnabled: state.isVideoEnabled,
+  }));
+
+  // ── 컨트롤 핸들러 ───────────────────────────
+  const toggleAudio = () => {
+    const { localStream: stream, isAudioEnabled: enabled, setAudioEnabled } =
+      useMediaStore.getState();
+    stream?.getAudioTracks().forEach((t) => {
+      t.enabled = !enabled;
+    });
+    setAudioEnabled(!enabled);
+  };
+
+  const toggleVideo = () => {
+    const { localStream: stream, isVideoEnabled: enabled, setVideoEnabled } =
+      useMediaStore.getState();
+    stream?.getVideoTracks().forEach((t) => {
+      t.enabled = !enabled;
+    });
+    setVideoEnabled(!enabled);
+  };
+
+  const handleLeave = () => {
+    cleanupAllPeers();
+    router.push('/');
+  };
+
+  const participantCount = participants.length + 1; // 나 포함
 
   return (
     <div className="room-container">
-      {/* 비디오 그리드 영역 */}
+      {connectionStatus === 'connecting' && (
+        <div className="room-connecting">연결 중...</div>
+      )}
+      {connectionStatus === 'error' && (
+        <div className="room-error">연결에 실패했습니다.</div>
+      )}
+
+      {/* 비디오 그리드 */}
       <main className="room-main">
-        <div className="video-grid video-grid--1">
-          {/* 내 비디오 (임시) */}
-          <div className="video-tile">
-            <div className="video-tile__placeholder">
-              <span className="video-tile__avatar">{userName[0].toUpperCase()}</span>
-            </div>
+        <div className={`video-grid video-grid--${participantCount}`}>
+          {/* 내 비디오 */}
+          <div className="video-tile video-tile--local">
+            {localStream ? (
+              <LocalVideo stream={localStream} />
+            ) : (
+              <div className="video-tile__placeholder">
+                <span className="video-tile__avatar">{userName[0].toUpperCase()}</span>
+              </div>
+            )}
             <div className="video-tile__info">
               <span className="video-tile__name">{userName} (나)</span>
             </div>
           </div>
+
+          {/* 참가자 비디오 */}
+          {participants.map((p) => (
+            <RemoteVideo key={p.id} socketId={p.id} name={p.name} />
+          ))}
         </div>
       </main>
 
@@ -36,36 +127,91 @@ export default function RoomPage() {
         </div>
 
         <div className="controls__center">
-          {/* 마이크 */}
-          <button type="button" className="controls__btn controls__btn--active" aria-label="마이크 끄기">
+          <button
+            type="button"
+            className={`controls__btn ${isAudioEnabled ? 'controls__btn--active' : ''}`}
+            aria-label={isAudioEnabled ? '마이크 끄기' : '마이크 켜기'}
+            onClick={toggleAudio}
+          >
             <MicIcon />
           </button>
 
-          {/* 카메라 */}
-          <button type="button" className="controls__btn controls__btn--active" aria-label="카메라 끄기">
+          <button
+            type="button"
+            className={`controls__btn ${isVideoEnabled ? 'controls__btn--active' : ''}`}
+            aria-label={isVideoEnabled ? '카메라 끄기' : '카메라 켜기'}
+            onClick={toggleVideo}
+          >
             <CameraIcon />
           </button>
 
-          {/* 화면 공유 */}
           <button type="button" className="controls__btn" aria-label="화면 공유">
             <ScreenShareIcon />
           </button>
 
-          {/* 나가기 */}
-          <button type="button" className="controls__btn controls__btn--danger" aria-label="나가기">
+          <button
+            type="button"
+            className="controls__btn controls__btn--danger"
+            aria-label="나가기"
+            onClick={handleLeave}
+          >
             <HangUpIcon />
           </button>
         </div>
 
         <div className="controls__right">
-          <span className="controls__participant-count">1명 참여 중</span>
+          <span className="controls__participant-count">{participantCount}명 참여 중</span>
         </div>
       </footer>
     </div>
   );
 }
 
-// ── 아이콘 (인라인 SVG) ───────────────────
+// ── 로컬 비디오 ───────────────────────────────
+
+function LocalVideo({ stream }: { stream: MediaStream }) {
+  return (
+    <video
+      className="video-tile__video"
+      autoPlay
+      muted
+      playsInline
+      ref={(el) => {
+        if (el) el.srcObject = stream;
+      }}
+    />
+  );
+}
+
+// ── 원격 비디오 ───────────────────────────────
+
+function RemoteVideo({ socketId, name }: { socketId: string; name: string }) {
+  const remoteStream = useMediaStore((state) => state.remoteStreams.get(socketId));
+
+  return (
+    <div className="video-tile">
+      {remoteStream ? (
+        <video
+          className="video-tile__video"
+          autoPlay
+          playsInline
+          ref={(el) => {
+            if (el) el.srcObject = remoteStream;
+          }}
+        />
+      ) : (
+        <div className="video-tile__placeholder">
+          <span className="video-tile__avatar">{name[0].toUpperCase()}</span>
+        </div>
+      )}
+      <div className="video-tile__info">
+        <span className="video-tile__name">{name}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── 아이콘 (인라인 SVG) ───────────────────────
 
 function MicIcon() {
   return (

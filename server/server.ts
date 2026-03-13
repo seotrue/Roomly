@@ -148,8 +148,8 @@ nextApp.prepare().then(() => {
   // Next.js 요청 처리
   // ─────────────────────────────────────────
 
-  expressApp.all('/{*path}', (req, res) => {
-    handle(req, res);
+  expressApp.use((req, res) => {
+    return handle(req, res);
   });
 
   httpServer.listen(PORT, () => {
