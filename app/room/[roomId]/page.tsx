@@ -6,7 +6,7 @@ import { useWebRTC } from '@/hooks/useWebRTC';
 import { useSocket } from '@/hooks/useSocket';
 import { useParticipantList } from '@/store/room/participantStore';
 import { useConnectionStore } from '@/store/room/connectionStore';
-import { useMediaStore } from '@/store/room/mediaStore';
+import { useMediaStore, useMyMediaState } from '@/store/room/mediaStore';
 import '@/styles/room.scss';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,10 +82,8 @@ export default function RoomPage() {
   // 연결 상태: 'connecting' | 'connected' | 'error' | 'idle'
   const connectionStatus = useConnectionStore((state) => state.connectionStatus);
   // 마이크/카메라 ON/OFF 상태 (버튼 활성화 스타일 적용용)
-  const { isAudioEnabled, isVideoEnabled } = useMediaStore((state) => ({
-    isAudioEnabled: state.isAudioEnabled,
-    isVideoEnabled: state.isVideoEnabled,
-  }));
+  // useMyMediaState: mediaStore에 미리 정의된 useShallow 셀렉터 — 객체 반환 시 무한루프 방지
+  const { isAudioEnabled, isVideoEnabled } = useMyMediaState();
 
   // ── 컨트롤 핸들러 ───────────────────────────────────────────────────────
 
