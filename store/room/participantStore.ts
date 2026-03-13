@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import { Participant } from '@/types/room';
 
 // ─────────────────────────────────────────────
@@ -121,8 +122,12 @@ export const useParticipant = (socketId: string) =>
   useParticipantStore((state) => state.participants.get(socketId));
 
 // 참가자 전체 배열 (VideoGrid에서 타일 목록 렌더링에 사용)
+// useShallow: Array.from()이 매 렌더마다 새 배열을 반환하면 무한루프 발생
+// → 배열 요소들의 참조가 같으면 리렌더를 건너뜀
 export const useParticipantList = () =>
-  useParticipantStore((state) => Array.from(state.participants.values()));
+  useParticipantStore(
+    useShallow((state) => Array.from(state.participants.values())),
+  );
 
 // 참가자 수
 export const useParticipantCount = () =>

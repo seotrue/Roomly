@@ -4,7 +4,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useMedia } from '@/hooks/useMedia';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { useSocket } from '@/hooks/useSocket';
-import { useParticipantStore } from '@/store/room/participantStore';
+import { useParticipantList } from '@/store/room/participantStore';
 import { useConnectionStore } from '@/store/room/connectionStore';
 import { useMediaStore } from '@/store/room/mediaStore';
 import '@/styles/room.scss';
@@ -75,10 +75,10 @@ export default function RoomPage() {
   });
 
   // ── store 구독 (렌더링용 상태) ──────────────────────────────────────────
-  // 참가자 목록: Map → Array 변환 (JSX에서 .map() 사용 위해)
-  const participants = useParticipantStore((state) =>
-    Array.from(state.participants.values()),
-  );
+  // 참가자 목록: useParticipantList 셀렉터 사용
+  // Array.from()을 직접 셀렉터에 쓰면 매 렌더마다 새 배열 참조 → 무한루프 발생
+  // participantStore에 미리 정의된 셀렉터는 내부에서 안정적으로 처리됨
+  const participants = useParticipantList();
   // 연결 상태: 'connecting' | 'connected' | 'error' | 'idle'
   const connectionStatus = useConnectionStore((state) => state.connectionStatus);
   // 마이크/카메라 ON/OFF 상태 (버튼 활성화 스타일 적용용)
