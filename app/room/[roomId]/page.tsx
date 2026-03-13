@@ -9,19 +9,43 @@ import { useConnectionStore } from '@/store/room/connectionStore';
 import { useMediaStore } from '@/store/room/mediaStore';
 import '@/styles/room.scss';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// RoomPage
+//
+// 역할: 방 페이지의 최상위 컴포넌트. 훅 조립 + 비디오 그리드 + 컨트롤 바 렌더링.
+//
+// 훅 의존성 구조:
+//   useMedia  →  localStream
+//                   ↓
+//   useWebRTC ←  localStream, sendOffer/sendAnswer/sendIceCandidate (useSocket에서 주입)
+//                   ↓ handleRoomJoined, handleOffer, handleAnswer, handleIceCandidate
+//   useSocket ←  위 핸들러들 + roomId/userName/joinMode
+//                   ↓ sendOffer, sendAnswer, sendIceCandidate
+//
+// 순환 참조 해결:
+//   useWebRTC이 sendOffer 등을 필요로 하고, useSocket이 handleOffer 등을 필요로 함.
+//   page.tsx에서 두 훅을 선언하고 클로저 래퍼로 연결하여 순환 참조 없이 조립.
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function RoomPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // URL에서 방 정보 추출 — 마운트 후 변경되지 않는 고정값
   const roomId = params.roomId as string;
   const userName = searchParams.get('name') ?? '익명';
   const joinMode = (searchParams.get('mode') ?? 'join') as 'create' | 'join';
 
-  // ── 미디어 스트림 획득 ──────────────────────
+  // ── 1단계: 미디어 스트림 획득 ──────────────────────────────────────────
+  // 마운트 즉시 카메라/마이크 권한 요청.
+  // localStream이 null이면 내 비디오 자리에 아바타 플레이스홀더 표시.
   const { localStream } = useMedia();
 
-  // ── WebRTC (sendOffer 등은 useSocket 초기화 후 주입) ─
+  // ── 2단계: WebRTC 연결 관리 준비 ───────────────────────────────────────
+  // sendOffer/sendAnswer/sendIceCandidate는 아직 선언 전이지만,
+  // 실제 호출 시점(소켓 이벤트 수신 후)에는 이미 useSocket이 초기화되어 있음.
+  // 클로저 래퍼 (targetId, offer) => sendOffer(...) 로 나중에 참조되도록 처리.
   const {
     handleRoomJoined,
     handleOffer,
@@ -31,46 +55,52 @@ export default function RoomPage() {
     cleanupAllPeers,
   } = useWebRTC({
     localStream,
-    // sendOffer/sendAnswer/sendIceCandidate는 useSocket에서 반환된 함수로 교체 필요.
-    // 순환 참조를 피하기 위해 socket ref를 직접 넘기는 대신,
-    // useSocket이 반환한 함수를 바인딩 후 사용한다.
     sendOffer: (targetId, offer) => sendOffer(targetId, offer),
     sendAnswer: (targetId, answer) => sendAnswer(targetId, answer),
     sendIceCandidate: (targetId, candidate) => sendIceCandidate(targetId, candidate),
   });
 
-  // ── 소켓 연결 + 시그널링 이벤트 바인딩 ─────
+  // ── 3단계: 소켓 연결 + 시그널링 이벤트 바인딩 ─────────────────────────
+  // useWebRTC에서 반환된 핸들러들을 onXxx 콜백으로 주입.
+  // 소켓이 connect 되면 자동으로 join-room을 emit.
   const { sendOffer, sendAnswer, sendIceCandidate } = useSocket({
     roomId,
     userName,
     joinMode,
-    onRoomJoined: handleRoomJoined,
-    onUserLeft: (socketId) => cleanupPeer(socketId),
-    onOffer: handleOffer,
-    onAnswer: handleAnswer,
-    onIceCandidate: handleIceCandidate,
+    onRoomJoined: handleRoomJoined,       // room-joined → 기존 참가자에게 offer 전송
+    onUserLeft: (socketId) => cleanupPeer(socketId), // user-left → peer 연결 종료
+    onOffer: handleOffer,                 // offer 수신 → answer 생성/전송
+    onAnswer: handleAnswer,               // answer 수신 → remoteDescription 설정
+    onIceCandidate: handleIceCandidate,   // ice-candidate 수신 → addIceCandidate
   });
 
-  // ── store 구독 (렌더링용) ───────────────────
+  // ── store 구독 (렌더링용 상태) ──────────────────────────────────────────
+  // 참가자 목록: Map → Array 변환 (JSX에서 .map() 사용 위해)
   const participants = useParticipantStore((state) =>
     Array.from(state.participants.values()),
   );
+  // 연결 상태: 'connecting' | 'connected' | 'error' | 'idle'
   const connectionStatus = useConnectionStore((state) => state.connectionStatus);
+  // 마이크/카메라 ON/OFF 상태 (버튼 활성화 스타일 적용용)
   const { isAudioEnabled, isVideoEnabled } = useMediaStore((state) => ({
     isAudioEnabled: state.isAudioEnabled,
     isVideoEnabled: state.isVideoEnabled,
   }));
 
-  // ── 컨트롤 핸들러 ───────────────────────────
+  // ── 컨트롤 핸들러 ───────────────────────────────────────────────────────
+
+  // 마이크 토글: track.enabled 직접 제어 (track.stop()이 아님 — 재활성화 가능)
+  // track.stop()은 하드웨어를 완전히 해제하므로 다시 켜려면 getUserMedia 재호출 필요.
   const toggleAudio = () => {
     const { localStream: stream, isAudioEnabled: enabled, setAudioEnabled } =
       useMediaStore.getState();
     stream?.getAudioTracks().forEach((t) => {
-      t.enabled = !enabled;
+      t.enabled = !enabled; // false면 무음 전송, true면 정상 전송
     });
-    setAudioEnabled(!enabled);
+    setAudioEnabled(!enabled); // store 업데이트 → 버튼 UI 반영
   };
 
+  // 카메라 토글: 마이크 토글과 동일한 패턴
   const toggleVideo = () => {
     const { localStream: stream, isVideoEnabled: enabled, setVideoEnabled } =
       useMediaStore.getState();
@@ -80,30 +110,37 @@ export default function RoomPage() {
     setVideoEnabled(!enabled);
   };
 
+  // 나가기: 모든 peer 연결 종료 후 홈으로 이동
+  // useMedia의 cleanup(resetMedia)은 컴포넌트 언마운트 시 자동 실행됨
   const handleLeave = () => {
-    cleanupAllPeers();
+    cleanupAllPeers(); // 모든 RTCPeerConnection.close()
     router.push('/');
   };
 
-  const participantCount = participants.length + 1; // 나 포함
+  // 비디오 그리드 레이아웃 클래스: 참가자 수에 따라 다른 CSS 적용
+  const participantCount = participants.length + 1; // 나 포함한 전체 수
 
   return (
     <div className="room-container">
+      {/* 연결 중 오버레이 */}
       {connectionStatus === 'connecting' && (
         <div className="room-connecting">연결 중...</div>
       )}
+      {/* 연결 실패 오버레이 */}
       {connectionStatus === 'error' && (
         <div className="room-error">연결에 실패했습니다.</div>
       )}
 
-      {/* 비디오 그리드 */}
+      {/* 비디오 그리드: 참가자 수에 따라 video-grid--1, --2, --3 ... 클래스 적용 */}
       <main className="room-main">
         <div className={`video-grid video-grid--${participantCount}`}>
-          {/* 내 비디오 */}
+          {/* 내 비디오 타일 */}
           <div className="video-tile video-tile--local">
             {localStream ? (
+              // getUserMedia 성공 → 실제 비디오 표시
               <LocalVideo stream={localStream} />
             ) : (
+              // 권한 요청 중 or 실패 → 이니셜 아바타 표시
               <div className="video-tile__placeholder">
                 <span className="video-tile__avatar">{userName[0].toUpperCase()}</span>
               </div>
@@ -113,20 +150,23 @@ export default function RoomPage() {
             </div>
           </div>
 
-          {/* 참가자 비디오 */}
+          {/* 원격 참가자 비디오 타일: store의 participants Map 기반으로 렌더링 */}
           {participants.map((p) => (
             <RemoteVideo key={p.id} socketId={p.id} name={p.name} />
           ))}
         </div>
       </main>
 
-      {/* 컨트롤 바 */}
+      {/* 하단 컨트롤 바 */}
       <footer className="controls">
+        {/* 좌측: 방 ID 표시 */}
         <div className="controls__left">
           <span className="controls__room-id">방 ID: {roomId}</span>
         </div>
 
+        {/* 중앙: 미디어 컨트롤 버튼들 */}
         <div className="controls__center">
+          {/* 마이크 토글: active 클래스로 ON/OFF 스타일 구분 */}
           <button
             type="button"
             className={`controls__btn ${isAudioEnabled ? 'controls__btn--active' : ''}`}
@@ -136,6 +176,7 @@ export default function RoomPage() {
             <MicIcon />
           </button>
 
+          {/* 카메라 토글 */}
           <button
             type="button"
             className={`controls__btn ${isVideoEnabled ? 'controls__btn--active' : ''}`}
@@ -145,10 +186,12 @@ export default function RoomPage() {
             <CameraIcon />
           </button>
 
+          {/* 화면 공유 (5단계에서 구현 예정) */}
           <button type="button" className="controls__btn" aria-label="화면 공유">
             <ScreenShareIcon />
           </button>
 
+          {/* 나가기: 모든 peer 정리 + 홈 이동 */}
           <button
             type="button"
             className="controls__btn controls__btn--danger"
@@ -159,6 +202,7 @@ export default function RoomPage() {
           </button>
         </div>
 
+        {/* 우측: 참가자 수 표시 */}
         <div className="controls__right">
           <span className="controls__participant-count">{participantCount}명 참여 중</span>
         </div>
@@ -167,7 +211,14 @@ export default function RoomPage() {
   );
 }
 
-// ── 로컬 비디오 ───────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// LocalVideo
+//
+// 내 카메라 스트림을 표시하는 video 엘리먼트.
+// muted: 내 목소리가 내 스피커로 나오지 않도록 (하울링 방지)
+// autoPlay: 스트림 연결 즉시 재생
+// playsInline: iOS Safari에서 전체화면 없이 인라인 재생
+// ─────────────────────────────────────────────────────────────────────────────
 
 function LocalVideo({ stream }: { stream: MediaStream }) {
   return (
@@ -177,20 +228,30 @@ function LocalVideo({ stream }: { stream: MediaStream }) {
       muted
       playsInline
       ref={(el) => {
+        // React ref 콜백: DOM 노드가 마운트될 때 srcObject를 직접 설정.
+        // srcObject는 JSX attribute로 설정 불가 → ref 콜백으로 처리.
         if (el) el.srcObject = stream;
       }}
     />
   );
 }
 
-// ── 원격 비디오 ───────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// RemoteVideo
+//
+// 원격 참가자의 스트림을 표시하는 비디오 타일.
+// mediaStore에서 해당 socketId의 remoteStream을 구독.
+// stream이 없으면 (WebRTC 연결 전) 이니셜 아바타 플레이스홀더 표시.
+// ─────────────────────────────────────────────────────────────────────────────
 
 function RemoteVideo({ socketId, name }: { socketId: string; name: string }) {
+  // pc.ontrack 이벤트로 스트림이 수신되면 store에 저장되고 여기서 구독됨
   const remoteStream = useMediaStore((state) => state.remoteStreams.get(socketId));
 
   return (
     <div className="video-tile">
       {remoteStream ? (
+        // WebRTC 연결 완료 → 실제 원격 스트림 표시
         <video
           className="video-tile__video"
           autoPlay
@@ -200,6 +261,7 @@ function RemoteVideo({ socketId, name }: { socketId: string; name: string }) {
           }}
         />
       ) : (
+        // WebRTC 연결 대기 중 → 이니셜 아바타
         <div className="video-tile__placeholder">
           <span className="video-tile__avatar">{name[0].toUpperCase()}</span>
         </div>
@@ -211,7 +273,7 @@ function RemoteVideo({ socketId, name }: { socketId: string; name: string }) {
   );
 }
 
-// ── 아이콘 (인라인 SVG) ───────────────────────
+// ── 아이콘 (인라인 SVG) ───────────────────────────────────────────────────────
 
 function MicIcon() {
   return (
