@@ -44,9 +44,13 @@ function isCreateRoomResponse(value: unknown): value is CreateRoomResponse {
 // API
 // ─────────────────────────────────────────────
 
+// 로컬: NEXT_PUBLIC_API_URL 미설정 → '' → '/api/rooms' (로컬 Express 처리)
+// 프로덕션: NEXT_PUBLIC_API_URL = Render URL → 'https://...onrender.com/api/rooms'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+
 export async function createRoom(): Promise<CreateRoomResult> {
   try {
-    const response = await fetch('/api/rooms', { method: 'POST' });
+    const response = await fetch(`${API_BASE}/api/rooms`, { method: 'POST' });
     const data: unknown = await response.json();
 
     if (!isCreateRoomResponse(data)) {
@@ -61,7 +65,7 @@ export async function createRoom(): Promise<CreateRoomResult> {
 
 export async function checkRoomExists(roomId: string): Promise<RoomCheckResult> {
   try {
-    const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`);
+    const response = await fetch(`${API_BASE}/api/rooms/${encodeURIComponent(roomId)}`);
     const data: unknown = await response.json();
 
     if (!isRoomExistsResponse(data)) {

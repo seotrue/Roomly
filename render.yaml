@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: roomly-signaling
+    runtime: node
+    buildCommand: npm ci
+    startCommand: npm run start:signaling
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_ORIGIN
+        sync: false  # Render 대시보드에서 Vercel 도메인으로 직접 설정

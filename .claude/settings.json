@@ -1,5 +1,18 @@
 {
   "env": {
     "ROOMLY_ENV": "project"
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/jinsolseo/WebstormProjects/Roomly && npx tsc --noEmit 2>&1 | head -30"
+          }
+        ]
+      }
+    ]
   }
 }

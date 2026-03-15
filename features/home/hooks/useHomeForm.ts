@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { createRoom, checkRoomExists } from '@/features/home/api/room';
+import { createRoom, checkRoomExists } from '@/features/home/services/room';
 import {
   type RoomMode,
   type HomeFormErrors,
