@@ -9,62 +9,49 @@ import { useWebRTCPractice } from '../hooks/useWebRTCPractice';
 //
 // 역할: WebRTC 연습용 페이지 컴포넌트
 //
-// TODO 6: hook 호출 및 연결
+// 사용법:
+// 1. 브라우저 2개(또는 탭 2개)에서 이 페이지 열기
+// 2. 양쪽 모두 "카메라 켜기" → "PeerConnection 생성" 클릭
+// 3. 한쪽(Alice)에서 "Offer 생성" → 복사
+// 4. 다른 쪽(Bob)에 붙여넣기 → "Offer 받기" → "Answer 생성" → 복사
+// 5. Alice에 Answer 붙여넣기 → "Answer 받기"
+// 6. 연결 완료! 🎉
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function WebRTCPracticePage() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
-  // ═════════════════════════════════════════════════════════════════════
-  // ✍️ TODO 6-1: useMediaPractice hook 호출
-  // ═════════════════════════════════════════════════════════════════════
-  // TODO: useMediaPractice()를 호출해서 localStream과 error를 받아오세요
-  // 힌트: const { localStream, error: mediaError } = useMediaPractice();
-  
-  const localStream = null as MediaStream | null; // 여기를 수정하세요!
-  const mediaError = null as string | null; // 여기를 수정하세요!
+  // Step 1: 미디어 스트림 획득
+  const { localStream, error: mediaError } = useMediaPractice();
 
-  // ═════════════════════════════════════════════════════════════════════
-  // ✍️ TODO 6-2: useWebRTCPractice hook 호출
-  // ═════════════════════════════════════════════════════════════════════
-  // TODO: useWebRTCPractice({ localStream })를 호출해서 필요한 함수들을 받아오세요
-  // 힌트: const { remoteStream, connectionState, ... } = useWebRTCPractice({ localStream });
-  
-  const remoteStream = null as MediaStream | null; // 여기를 수정하세요!
-  const connectionState = 'new' as RTCPeerConnectionState;
-  const offer = '';
-  const answer = '';
-  const createPeerConnection = () => {}; // 여기를 수정하세요!
-  const handleCreateOffer = async () => {}; // 여기를 수정하세요!
-  const receiveOffer = async (text: string) => {}; // 여기를 수정하세요!
-  const handleCreateAnswer = async () => {}; // 여기를 수정하세요!
-  const receiveAnswer = async (text: string) => {}; // 여기를 수정하세요!
-  const cleanup = () => {}; // 여기를 수정하세요!
+  // Step 2-5: WebRTC 연결 관리
+  const {
+    remoteStream,
+    connectionState,
+    offer,
+    answer,
+    createPeerConnection,
+    handleCreateOffer,
+    receiveOffer,
+    handleCreateAnswer,
+    receiveAnswer,
+    cleanup,
+  } = useWebRTCPractice({ localStream });
 
   // 입력 필드 state
   const [offerInput, setOfferInput] = useState('');
   const [answerInput, setAnswerInput] = useState('');
 
-  // ═════════════════════════════════════════════════════════════════════
-  // ✍️ TODO 6-3: 로컬 비디오 연결
-  // ═════════════════════════════════════════════════════════════════════
-  // TODO: localStream을 localVideoRef에 연결하세요
-  // 힌트: if (localVideoRef.current && localStream) {
-  //         localVideoRef.current.srcObject = localStream;
-  //       }
-  
-  // 여기에 코드를 작성하세요!
+  // 로컬 비디오 연결
+  if (localVideoRef.current && localStream) {
+    localVideoRef.current.srcObject = localStream;
+  }
 
-  // ═════════════════════════════════════════════════════════════════════
-  // ✍️ TODO 6-4: 원격 비디오 연결
-  // ═════════════════════════════════════════════════════════════════════
-  // TODO: remoteStream을 remoteVideoRef에 연결하세요
-  // 힌트: if (remoteVideoRef.current && remoteStream) {
-  //         remoteVideoRef.current.srcObject = remoteStream;
-  //       }
-  
-  // 여기에 코드를 작성하세요!
+  // 원격 비디오 연결
+  if (remoteVideoRef.current && remoteStream) {
+    remoteVideoRef.current.srcObject = remoteStream;
+  }
 
   // Offer 복사
   const copyOffer = () => {
@@ -144,16 +131,16 @@ export default function WebRTCPracticePage() {
           marginBottom: '15px',
           borderRadius: '4px'
         }}>
-          <strong style={{ color: '#e65100' }}>✍️ TODO 6-1:</strong>
+          <strong style={{ color: '#e65100' }}>✍️ TODO 1:</strong>
           <p style={{ marginTop: '10px' }}>
-            이 파일의 상단에서 <code style={{
+            <code style={{
               background: '#f5f5f5',
               padding: '2px 6px',
               borderRadius: '3px',
               color: '#d32f2f'
             }}>
-              useMediaPractice()
-            </code> hook을 호출하세요!
+              practice/hooks/useMediaPractice.ts
+            </code> 파일을 열어서 TODO를 완성하세요!
           </p>
         </div>
 
@@ -250,16 +237,16 @@ export default function WebRTCPracticePage() {
           marginBottom: '15px',
           borderRadius: '4px'
         }}>
-          <strong style={{ color: '#e65100' }}>✍️ TODO 6-2:</strong>
+          <strong style={{ color: '#e65100' }}>✍️ TODO 2:</strong>
           <p style={{ marginTop: '10px' }}>
-            이 파일의 상단에서 <code style={{
+            <code style={{
               background: '#f5f5f5',
               padding: '2px 6px',
               borderRadius: '3px',
               color: '#d32f2f'
             }}>
-              useWebRTCPractice(&#123; localStream &#125;)
-            </code> hook을 호출하세요!
+              practice/hooks/useWebRTCPractice.ts
+            </code> 파일의 TODO 2-1, 2-2, 2-3을 완성하세요!
           </p>
         </div>
 
@@ -295,6 +282,26 @@ export default function WebRTCPracticePage() {
         <h2 style={{ fontSize: '18px', marginBottom: '15px' }}>
           📤 STEP 3: Offer 생성 (연결 시작하는 쪽)
         </h2>
+        
+        <div style={{
+          background: '#fff3e0',
+          borderLeft: '4px solid #ff9800',
+          padding: '15px',
+          marginBottom: '15px',
+          borderRadius: '4px'
+        }}>
+          <strong style={{ color: '#e65100' }}>✍️ TODO 3:</strong>
+          <p style={{ marginTop: '10px' }}>
+            <code style={{
+              background: '#f5f5f5',
+              padding: '2px 6px',
+              borderRadius: '3px',
+              color: '#d32f2f'
+            }}>
+              practice/hooks/useWebRTCPractice.ts
+            </code> 파일의 TODO 3-1, 3-2를 완성하세요!
+          </p>
+        </div>
 
         <button
           onClick={handleCreateOffer}
@@ -356,6 +363,26 @@ export default function WebRTCPracticePage() {
         <h2 style={{ fontSize: '18px', marginBottom: '15px' }}>
           📥 STEP 4: Offer 받기 & Answer 생성
         </h2>
+        
+        <div style={{
+          background: '#fff3e0',
+          borderLeft: '4px solid #ff9800',
+          padding: '15px',
+          marginBottom: '15px',
+          borderRadius: '4px'
+        }}>
+          <strong style={{ color: '#e65100' }}>✍️ TODO 4:</strong>
+          <p style={{ marginTop: '10px' }}>
+            <code style={{
+              background: '#f5f5f5',
+              padding: '2px 6px',
+              borderRadius: '3px',
+              color: '#d32f2f'
+            }}>
+              practice/hooks/useWebRTCPractice.ts
+            </code> 파일의 TODO 4-1, 4-2, 4-3, 4-4를 완성하세요!
+          </p>
+        </div>
 
         <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
           상대방의 Offer 붙여넣기:
@@ -453,6 +480,26 @@ export default function WebRTCPracticePage() {
         <h2 style={{ fontSize: '18px', marginBottom: '15px' }}>
           ✅ STEP 5: Answer 받기 (연결 완료)
         </h2>
+        
+        <div style={{
+          background: '#fff3e0',
+          borderLeft: '4px solid #ff9800',
+          padding: '15px',
+          marginBottom: '15px',
+          borderRadius: '4px'
+        }}>
+          <strong style={{ color: '#e65100' }}>✍️ TODO 5:</strong>
+          <p style={{ marginTop: '10px' }}>
+            <code style={{
+              background: '#f5f5f5',
+              padding: '2px 6px',
+              borderRadius: '3px',
+              color: '#d32f2f'
+            }}>
+              practice/hooks/useWebRTCPractice.ts
+            </code> 파일의 TODO 5-1, 5-2를 완성하세요!
+          </p>
+        </div>
 
         <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
           상대방의 Answer 붙여넣기:
@@ -537,7 +584,7 @@ export default function WebRTCPracticePage() {
             background: '#fff',
             padding: '2px 6px',
             borderRadius: '3px'
-          }}>practice/pages/WebRTCPracticePage-complete.tsx</code> 정답 파일을 참고하세요!
+          }}>practice/hooks/*-answer.ts</code> 정답 파일을 참고하세요!
         </p>
       </div>
     </div>

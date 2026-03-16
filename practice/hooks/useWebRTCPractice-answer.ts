@@ -78,7 +78,7 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
   };
 
   // ✅ 정답 3: Offer 생성
-  const createOffer = async () => {
+  const handleCreateOffer = async () => {
     const pc = pcRef.current;
     if (!pc) {
       console.error('❌ PeerConnection이 없습니다. 먼저 생성하세요.');
@@ -127,7 +127,7 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
     }
   };
 
-  const createAnswer = async () => {
+  const handleCreateAnswer = async () => {
     const pc = pcRef.current;
     if (!pc) {
       console.error('❌ PeerConnection이 없습니다.');
@@ -194,9 +194,9 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
     offer,
     answer,
     createPeerConnection,
-    createOffer,
+    handleCreateOffer,
     receiveOffer,
-    createAnswer,
+    handleCreateAnswer,
     receiveAnswer,
     cleanup,
   };

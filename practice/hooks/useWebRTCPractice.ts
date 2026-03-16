@@ -12,7 +12,7 @@ import { useRef, useState } from 'react';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun.l.google.com:19302' }, // 구글이 제공하는 서버?????
 ];
 
 type UseWebRTCPracticeParams = {
@@ -27,7 +27,7 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
   const [answer, setAnswer] = useState<string>('');
 
   // ═════════════════════════════════════════════════════════════════════
-  // ✍️ TODO 2-1: PeerConnection 생성
+  // ✍️ TODO 2-1: PeerConnection 생성 -> 연걸을 돋기 위한 셋팅?
   // ═════════════════════════════════════════════════════════════════════
   const createPeerConnection = () => {
     if (pcRef.current) {
@@ -41,7 +41,7 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
       // TODO: RTCPeerConnection 생성
       // 힌트: new RTCPeerConnection({ iceServers: ICE_SERVERS })
       
-      const pc = null as any; // 여기를 수정하세요!
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
       
       if (!pc) {
         throw new Error('PeerConnection을 생성해주세요!');
@@ -54,21 +54,24 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
       // ═════════════════════════════════════════════════════════════════════
       // TODO: localStream의 모든 트랙을 PeerConnection에 추가
       // 힌트: localStream?.getTracks().forEach(track => pc.addTrack(track, localStream))
+      console.log(localStream,'얜 어디서 만들어서 넘겨주는 애야????');
+      console.log(pc,'pc의 역활은?');
+      localStream?.getTracks().forEach(track=>pc.addTrack(track, localStream));
       
-      // 여기에 코드를 작성하세요!
-
-      console.log('✅ 로컬 트랙 추가 완료');
 
       // ═════════════════════════════════════════════════════════════════════
       // ✍️ TODO 2-3: 이벤트 리스너 등록
       // ═════════════════════════════════════════════════════════════════════
       
-      // 1) ICE Candidate 이벤트
+      // 1) ICE Candidate 이벤트 => 역활이 머랫지?
       pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
         // TODO: event.candidate가 있으면 로그 출력
         // 힌트: if (event.candidate) { console.log('🗺️ ICE Candidate:', event.candidate.type) }
         
         // 여기에 코드를 작성하세요!
+        if (event.candidate) {
+          console.log('🗺️ ICE Candidate:', event.candidate.type);
+        }
       };
 
       // 2) 상대방 트랙 수신 이벤트
@@ -77,7 +80,7 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
         // 힌트: setRemoteStream(event.streams[0])
         
         // 여기에 코드를 작성하세요!
-        
+        setRemoteStream(event.streams[0]);
         console.log('📹 상대방 트랙 수신!', event.track.kind);
       };
 
@@ -87,7 +90,7 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
         // 힌트: setConnectionState(pc.connectionState)
         
         // 여기에 코드를 작성하세요!
-        
+        setConnectionState(pc.connectionState);
         console.log('🔌 연결 상태:', pc.connectionState);
       };
 
@@ -98,9 +101,9 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
   };
 
   // ═════════════════════════════════════════════════════════════════════
-  // ✍️ TODO 3: Offer 생성
+  // ✍️ TODO 3: Offer 생성? -> 먼저 입장한 사람이 나는 이런 미디어를 보낼수 있어 너는 어때 라고 준비중
   // ═════════════════════════════════════════════════════════════════════
-  const createOffer = async () => {
+  const handleCreateOffer = async () => {
     const pc = pcRef.current;
     if (!pc) {
       console.error('❌ PeerConnection이 없습니다. 먼저 생성하세요.');
@@ -113,15 +116,15 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
       // TODO 3-1: Offer 생성
       // 힌트: const offerObj = await pc.createOffer()
       
-      const offerObj = null as any; // 여기를 수정하세요!
-      
+      const offerObj = await pc.createOffer();  // 이거는 뭐하는겨??????
       if (!offerObj) {
         throw new Error('Offer를 생성해주세요!');
       }
 
       // TODO 3-2: Local Description 설정
       // 힌트: await pc.setLocalDescription(offerObj)
-      
+
+      await pc.setLocalDescription(offerObj); // 이것도 뭐하는겨?????
       // 여기에 코드를 작성하세요!
 
       // JSON 문자열로 저장
@@ -167,7 +170,7 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
     }
   };
 
-  const createAnswer = async () => {
+  const handleCreateAnswer = async () => {
     const pc = pcRef.current;
     if (!pc) {
       console.error('❌ PeerConnection이 없습니다.');
@@ -250,9 +253,9 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
     offer,
     answer,
     createPeerConnection,
-    createOffer,
+    handleCreateOffer,
     receiveOffer,
-    createAnswer,
+    handleCreateAnswer,
     receiveAnswer,
     cleanup,
   };
