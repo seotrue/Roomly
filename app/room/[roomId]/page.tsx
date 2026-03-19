@@ -17,13 +17,13 @@ import '@/styles/room.scss';
 // 훅 의존성 구조:
 //   useMedia  →  localStream
 //                   ↓
-//   useWebRTC ←  localStream, sendOffer/sendAnswer/sendIceCandidate (useSocket에서 주입)
-//                   ↓ handleRoomJoined, handleOffer, handleAnswer, handleIceCandidate
+//   useWebRTC ←  localStream, sendConnectionProposal/sendConnectionResponse/sendNetworkPath (useSocket에서 주입)
+//                   ↓ initiateConnectionsWithExistingPeers, acceptProposalAndRespond, finalizeConnection, addNetworkPath
 //   useSocket ←  위 핸들러들 + roomId/userName/joinMode
-//                   ↓ sendOffer, sendAnswer, sendIceCandidate
+//                   ↓ sendConnectionProposal, sendConnectionResponse, sendNetworkPath
 //
 // 순환 참조 해결:
-//   useWebRTC이 sendOffer 등을 필요로 하고, useSocket이 handleOffer 등을 필요로 함.
+//   useWebRTC이 send 함수들을 필요로 하고, useSocket이 핸들러들을 필요로 함.
 //   page.tsx에서 두 훅을 선언하고 클로저 래퍼로 연결하여 순환 참조 없이 조립.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -43,35 +43,35 @@ export default function RoomPage() {
   const { localStream } = useMedia();
 
   // ── 2단계: WebRTC 연결 관리 준비 ───────────────────────────────────────
-  // sendOffer/sendAnswer/sendIceCandidate는 아직 선언 전이지만,
+  // send 함수들은 아직 선언 전이지만,
   // 실제 호출 시점(소켓 이벤트 수신 후)에는 이미 useSocket이 초기화되어 있음.
-  // 클로저 래퍼 (targetId, offer) => sendOffer(...) 로 나중에 참조되도록 처리.
+  // 클로저 래퍼로 나중에 참조되도록 처리.
   const {
-    handleRoomJoined,
-    handleOffer,
-    handleAnswer,
-    handleIceCandidate,
+    initiateConnectionsWithExistingPeers,
+    acceptProposalAndRespond,
+    finalizeConnection,
+    addNetworkPath,
     cleanupPeer,
     cleanupAllPeers,
   } = useWebRTC({
     localStream,
-    sendOffer: (targetId, offer) => sendOffer(targetId, offer),
-    sendAnswer: (targetId, answer) => sendAnswer(targetId, answer),
-    sendIceCandidate: (targetId, candidate) => sendIceCandidate(targetId, candidate),
+    sendOffer: (targetId, offer) => sendConnectionProposal(targetId, offer),
+    sendAnswer: (targetId, answer) => sendConnectionResponse(targetId, answer),
+    sendIceCandidate: (targetId, candidate) => sendNetworkPath(targetId, candidate),
   });
 
   // ── 3단계: 소켓 연결 + 시그널링 이벤트 바인딩 ─────────────────────────
   // useWebRTC에서 반환된 핸들러들을 onXxx 콜백으로 주입.
   // 소켓이 connect 되면 자동으로 join-room을 emit.
-  const { sendOffer, sendAnswer, sendIceCandidate } = useSocket({
+  const { sendConnectionProposal, sendConnectionResponse, sendNetworkPath } = useSocket({
     roomId,
     userName,
     joinMode,
-    onRoomJoined: handleRoomJoined,       // room-joined → 기존 참가자에게 offer 전송
-    onUserLeft: (socketId) => cleanupPeer(socketId), // user-left → peer 연결 종료
-    onOffer: handleOffer,                 // offer 수신 → answer 생성/전송
-    onAnswer: handleAnswer,               // answer 수신 → remoteDescription 설정
-    onIceCandidate: handleIceCandidate,   // ice-candidate 수신 → addIceCandidate
+    onRoomJoined: initiateConnectionsWithExistingPeers,  // room-joined → 기존 참가자에게 연결 시작
+    onUserLeft: (socketId) => cleanupPeer(socketId),     // user-left → peer 연결 종료
+    onOffer: acceptProposalAndRespond,                   // offer 수신 → 제안 수락 및 응답
+    onAnswer: finalizeConnection,                        // answer 수신 → 연결 완료
+    onIceCandidate: addNetworkPath,                      // ice-candidate 수신 → 네트워크 경로 추가
   });
 
   // ── store 구독 (렌더링용 상태) ──────────────────────────────────────────

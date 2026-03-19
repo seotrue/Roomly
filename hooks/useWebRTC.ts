@@ -110,15 +110,15 @@ export const useWebRTC = ({
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // handleRoomJoined
+  // initiateConnectionsWithExistingPeers
   //
-  // 내가 새로 방에 입장했을 때, 이미 있던 참가자들에게 offer를 보내는 함수.
+  // 내가 새로 방에 입장했을 때, 이미 있던 참가자들에게 연결 제안을 보내는 함수.
   // useSocket의 onRoomJoined 콜백으로 주입됨.
   //
   // 호출 시점: 서버로부터 'room-joined' 이벤트 수신 직후
   // ─────────────────────────────────────────────────────────────────────────
 
-  const handleRoomJoined = async (existingParticipants: RoomParticipant[]) => {
+  const initiateConnectionsWithExistingPeers = async (existingParticipants: RoomParticipant[]) => {
     for (const participant of existingParticipants) {
       const pc = createPeerConnection(participant.socketId);
 
@@ -131,15 +131,15 @@ export const useWebRTC = ({
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // handleOffer
+  // acceptProposalAndRespond
   //
-  // 기존 참가자로부터 offer를 받았을 때 answer를 생성해 돌려보내는 함수.
+  // 기존 참가자로부터 연결 제안을 받았을 때 수락하고 응답을 돌려보내는 함수.
   // useSocket의 onOffer 콜백으로 주입됨.
   //
   // 호출 시점: 서버로부터 'offer' 이벤트 수신 시
   // ─────────────────────────────────────────────────────────────────────────
 
-  const handleOffer = async (
+  const acceptProposalAndRespond = async (
     fromId: string,
     offer: RTCSessionDescriptionInit,
   ) => {
@@ -155,15 +155,15 @@ export const useWebRTC = ({
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // handleAnswer
+  // finalizeConnection
   //
-  // 내가 보낸 offer에 대한 answer를 받았을 때 remote description 설정.
+  // 내가 보낸 연결 제안에 대한 응답을 받았을 때 연결을 완료하는 함수.
   // useSocket의 onAnswer 콜백으로 주입됨.
   //
   // 호출 시점: 서버로부터 'answer' 이벤트 수신 시
   // ─────────────────────────────────────────────────────────────────────────
 
-  const handleAnswer = async (
+  const finalizeConnection = async (
     fromId: string,
     answer: RTCSessionDescriptionInit,
   ) => {
@@ -175,7 +175,7 @@ export const useWebRTC = ({
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // handleIceCandidate
+  // addNetworkPath
   //
   // 상대방이 찾은 네트워크 경로(ICE candidate)를 내 peer connection에 추가.
   // useSocket의 onIceCandidate 콜백으로 주입됨.
@@ -184,7 +184,7 @@ export const useWebRTC = ({
   //       현재는 순서 의존적이며, 추후 candidate 큐 구현으로 보완 예정.
   // ─────────────────────────────────────────────────────────────────────────
 
-  const handleIceCandidate = async (
+  const addNetworkPath = async (
     fromId: string,
     candidate: RTCIceCandidateInit,
   ) => {
@@ -217,11 +217,11 @@ export const useWebRTC = ({
   };
 
   return {
-    handleRoomJoined,   // page.tsx → useSocket onRoomJoined에 주입
-    handleOffer,        // page.tsx → useSocket onOffer에 주입
-    handleAnswer,       // page.tsx → useSocket onAnswer에 주입
-    handleIceCandidate, // page.tsx → useSocket onIceCandidate에 주입
-    cleanupPeer,        // page.tsx → useSocket onUserLeft에 주입
-    cleanupAllPeers,    // page.tsx → 나가기 버튼 클릭 시 호출
+    initiateConnectionsWithExistingPeers,   // page.tsx → useSocket onRoomJoined에 주입
+    acceptProposalAndRespond,               // page.tsx → useSocket onOffer에 주입
+    finalizeConnection,                     // page.tsx → useSocket onAnswer에 주입
+    addNetworkPath,                         // page.tsx → useSocket onIceCandidate에 주입
+    cleanupPeer,                            // page.tsx → useSocket onUserLeft에 주입
+    cleanupAllPeers,                        // page.tsx → 나가기 버튼 클릭 시 호출
   };
 };
