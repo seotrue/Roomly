@@ -17,19 +17,7 @@ export default function WebRTCPracticePage() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
-  // ═════════════════════════════════════════════════════════════════════
-  // ✍️ TODO 6-1: useMediaPractice hook 호출
-  // ═════════════════════════════════════════════════════════════════════
-  // TODO: useMediaPractice()를 호출해서 localStream과 error를 받아오세요
-  // 힌트: const { localStream, error: mediaError } = useMediaPractice();
-
   const { localStream, error: mediaError } = useMediaPractice();
-
-  // ═════════════════════════════════════════════════════════════════════
-  // ✍️ TODO 6-2: useWebRTCPractice hook 호출
-  // ═════════════════════════════════════════════════════════════════════
-  // TODO: useWebRTCPractice({ localStream })를 호출해서 필요한 함수들을 받아오세요
-  // 힌트: const { remoteStream, connectionState, ... } = useWebRTCPractice({ localStream });
 
   const {
     remoteStream,
@@ -44,11 +32,9 @@ export default function WebRTCPracticePage() {
     cleanup,
   } = useWebRTCPractice({ localStream });
 
-
   // 입력 필드 state
   const [offerInput, setOfferInput] = useState("");
   const [answerInput, setAnswerInput] = useState("");
-
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
@@ -62,26 +48,50 @@ export default function WebRTCPracticePage() {
     }
   }, [remoteStream]);
 
-  
-
-  // Offer 복사
-  const copyOffer = () => {
+  // ═════════════════════════════════════════════════════════════════════
+  // copyConnectionProposal
+  //
+  // 역할: 생성된 연결 제안(Offer)을 클립보드에 복사
+  // 사용: 기존 참가자(Alice)가 "Offer 생성" 후 이 버튼을 눌러 복사
+  //       → 복사한 내용을 신규 참가자(Bob)에게 전달 (수동 시그널링)
+  // ═════════════════════════════════════════════════════════════════════
+  const copyConnectionProposal = () => {
     navigator.clipboard.writeText(offer);
-    alert("📋 Offer가 복사되었습니다!");
+    alert("📋 연결 제안이 복사되었습니다!");
   };
 
-  // Answer 복사
-  const copyAnswer = () => {
+  // ═════════════════════════════════════════════════════════════════════
+  // copyConnectionResponse
+  //
+  // 역할: 생성된 연결 응답(Answer)을 클립보드에 복사
+  // 사용: 신규 참가자(Bob)가 "Answer 생성" 후 이 버튼을 눌러 복사
+  //       → 복사한 내용을 기존 참가자(Alice)에게 전달 (수동 시그널링)
+  // ═════════════════════════════════════════════════════════════════════
+  const copyConnectionResponse = () => {
     navigator.clipboard.writeText(answer);
-    alert("📋 Answer가 복사되었습니다!");
+    alert("📋 연결 응답이 복사되었습니다!");
   };
 
-  // 연결 제안 수락 핸들러
+  // ═════════════════════════════════════════════════════════════════════
+  // handleAcceptProposal
+  //
+  // 역할: 입력된 연결 제안(Offer)을 수락하는 핸들러
+  // 사용: 신규 참가자(Bob)가 Alice로부터 받은 Offer를 텍스트 영역에 붙여넣고
+  //       "Offer 받기" 버튼을 클릭하면 이 함수가 실행됨
+  // 내부 동작: acceptConnectionProposal 호출 → setRemoteDescription 설정
+  // ═════════════════════════════════════════════════════════════════════
   const handleAcceptProposal = async () => {
     await acceptConnectionProposal(offerInput);
   };
 
-  // 연결 응답 적용 핸들러
+  // ═════════════════════════════════════════════════════════════════════
+  // handleApplyResponse
+  //
+  // 역할: 입력된 연결 응답(Answer)을 적용하는 핸들러
+  // 사용: 기존 참가자(Alice)가 Bob으로부터 받은 Answer를 텍스트 영역에 붙여넣고
+  //       "Answer 받기" 버튼을 클릭하면 이 함수가 실행됨
+  // 내부 동작: applyConnectionResponse 호출 → setRemoteDescription 설정 → 연결 완료
+  // ═════════════════════════════════════════════════════════════════════
   const handleApplyResponse = async () => {
     await applyConnectionResponse(answerInput);
   };
@@ -352,7 +362,7 @@ export default function WebRTCPracticePage() {
         </button>
 
         <button
-          onClick={copyOffer}
+          onClick={copyConnectionProposal}
           disabled={!offer}
           style={{
             background: offer ? "#ff9800" : "#ccc",
@@ -453,7 +463,7 @@ export default function WebRTCPracticePage() {
         </button>
 
         <button
-          onClick={copyAnswer}
+          onClick={copyConnectionResponse}
           disabled={!answer}
           style={{
             background: answer ? "#ff9800" : "#ccc",

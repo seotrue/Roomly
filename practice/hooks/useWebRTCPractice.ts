@@ -226,8 +226,6 @@ export const useWebRTCPractice = ({ localStream }: UseWebRTCPracticeParams) => {
       // 힌트:
       const answerObj = JSON.parse(answerText);
 
-      const answerObj = null as any; // 여기를 수정하세요!
-
       if (!answerObj) {
         throw new Error("Answer를 파싱해주세요!");
       }
