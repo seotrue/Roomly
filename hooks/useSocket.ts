@@ -56,7 +56,8 @@ export const useSocket = ({
 
   // ── Stale Closure 방지: 콜백 ref ────────────────────────────────────────
   // useEffect 내부 이벤트 핸들러는 최초 마운트 시 함수 참조를 캡처함.
-  // 이후 부모 컴포넌트가 리렌더되어 새로운 함수가 내려와도 캡처된 참조는 변하지 않음.
+  // 이후 부모 컴포넌트가 리렌더되어 새로운 함수가 내려와도 캡처된 참조는
+  // 변하지 않음.
   // → ref에 저장하고 매 렌더마다 갱신하면 이벤트 핸들러가 항상 최신 함수를 호출함.
   const onRoomJoinedRef = useRef(onRoomJoined);
   const onUserLeftRef = useRef(onUserLeft);
@@ -87,8 +88,12 @@ export const useSocket = ({
     //   그러면 소켓이 재생성되는 문제 발생
     const { setRoomInfo, setConnectionStatus, setErrorMessage } =
       useConnectionStore.getState();
-    const { setParticipants, addParticipant, removeParticipant } =
-      useParticipantStore.getState();
+    const {
+      setParticipants,
+      addParticipant,
+      removeParticipant,
+      updateParticipantMedia,
+    } = useParticipantStore.getState();
 
     // 연결 시작을 사용자에게 알림 (로딩 UI 표시용)
     setConnectionStatus("connecting");
@@ -152,6 +157,17 @@ export const useSocket = ({
       onUserLeftRef.current(socketId);
     });
 
+    s.on(
+      "media-state-changed",
+      (socketId: string, state: { audio?: boolean; video?: boolean }) => {
+        updateParticipantMedia(
+          socketId,
+          state.audio ?? true,
+          state.video ?? true,
+        );
+      },
+    );
+
     // ── WebRTC 시그널링 수신 → useWebRTC 핸들러로 위임 ───────────────────
     // 서버는 offer/answer/ice-candidate를 단순 중계(relay)만 함.
     // 실제 처리는 useWebRTC의 각 핸들러가 담당.
@@ -191,12 +207,18 @@ export const useSocket = ({
   // ─────────────────────────────────────────────────────────────────────────
 
   // 내가 생성한 연결 제안을 특정 대상에게 전송
-  const sendConnectionProposal = (targetId: string, offer: RTCSessionDescriptionInit) => {
+  const sendConnectionProposal = (
+    targetId: string,
+    offer: RTCSessionDescriptionInit,
+  ) => {
     socket.current?.emit("offer", targetId, offer);
   };
 
   // 상대방의 제안에 대한 응답을 전송
-  const sendConnectionResponse = (targetId: string, answer: RTCSessionDescriptionInit) => {
+  const sendConnectionResponse = (
+    targetId: string,
+    answer: RTCSessionDescriptionInit,
+  ) => {
     socket.current?.emit("answer", targetId, answer);
   };
 
@@ -209,9 +231,9 @@ export const useSocket = ({
   };
 
   return {
-    socket,                    // 필요 시 직접 소켓 접근용 (toggle-audio 등)
-    sendConnectionProposal,    // useWebRTC에 주입
-    sendConnectionResponse,    // useWebRTC에 주입
-    sendNetworkPath,           // useWebRTC에 주입
+    socket, // 필요 시 직접 소켓 접근용 (toggle-audio 등)
+    sendConnectionProposal, // useWebRTC에 주입
+    sendConnectionResponse, // useWebRTC에 주입
+    sendNetworkPath, // useWebRTC에 주입
   };
 };
