@@ -33,6 +33,9 @@ type ParticipantActions = {
     video?: boolean,
   ) => void;
 
+  // screen-share-changed 이벤트 수신 시 호출
+  updateParticipantScreenShare: (socketId: string, enabled: boolean) => void;
+
   // 방 퇴장 시 참가자 목록 초기화
   resetParticipants: () => void;
 };
