@@ -1,13 +1,14 @@
-'use client';
+"use client";
 
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { useMedia } from '@/hooks/useMedia';
-import { useWebRTC } from '@/hooks/useWebRTC';
-import { useSocket } from '@/hooks/useSocket';
-import { useParticipantList } from '@/store/room/participantStore';
-import { useConnectionStore } from '@/store/room/connectionStore';
-import { useMediaStore, useMyMediaState } from '@/store/room/mediaStore';
-import '@/styles/room.scss';
+import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useMedia } from "@/hooks/useMedia";
+import { useWebRTC } from "@/hooks/useWebRTC";
+import { useSocket } from "@/hooks/useSocket";
+import { useParticipantList } from "@/store/room/participantStore";
+import { useConnectionStore } from "@/store/room/connectionStore";
+import { useMediaStore, useMyMediaState } from "@/store/room/mediaStore";
+import "@/styles/room.scss";
+import { useRef } from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RoomPage
@@ -17,13 +18,13 @@ import '@/styles/room.scss';
 // 훅 의존성 구조:
 //   useMedia  →  localStream
 //                   ↓
-//   useWebRTC ←  localStream, sendOffer/sendAnswer/sendIceCandidate (useSocket에서 주입)
-//                   ↓ handleRoomJoined, handleOffer, handleAnswer, handleIceCandidate
+//   useWebRTC ←  localStream, sendConnectionProposal/sendConnectionResponse/sendNetworkPath (useSocket에서 주입)
+//                   ↓ initiateConnectionsWithExistingPeers, acceptProposalAndRespond, finalizeConnection, addNetworkPath
 //   useSocket ←  위 핸들러들 + roomId/userName/joinMode
-//                   ↓ sendOffer, sendAnswer, sendIceCandidate
+//                   ↓ sendConnectionProposal, sendConnectionResponse, sendNetworkPath
 //
 // 순환 참조 해결:
-//   useWebRTC이 sendOffer 등을 필요로 하고, useSocket이 handleOffer 등을 필요로 함.
+//   useWebRTC이 send 함수들을 필요로 하고, useSocket이 핸들러들을 필요로 함.
 //   page.tsx에서 두 훅을 선언하고 클로저 래퍼로 연결하여 순환 참조 없이 조립.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -34,8 +35,8 @@ export default function RoomPage() {
 
   // URL에서 방 정보 추출 — 마운트 후 변경되지 않는 고정값
   const roomId = params.roomId as string;
-  const userName = searchParams.get('name') ?? '익명';
-  const joinMode = (searchParams.get('mode') ?? 'join') as 'create' | 'join';
+  const userName = searchParams.get("name") ?? "익명";
+  const joinMode = (searchParams.get("mode") ?? "join") as "create" | "join";
 
   // ── 1단계: 미디어 스트림 획득 ──────────────────────────────────────────
   // 마운트 즉시 카메라/마이크 권한 요청.
@@ -43,35 +44,43 @@ export default function RoomPage() {
   const { localStream } = useMedia();
 
   // ── 2단계: WebRTC 연결 관리 준비 ───────────────────────────────────────
-  // sendOffer/sendAnswer/sendIceCandidate는 아직 선언 전이지만,
+  // send 함수들은 아직 선언 전이지만,
   // 실제 호출 시점(소켓 이벤트 수신 후)에는 이미 useSocket이 초기화되어 있음.
-  // 클로저 래퍼 (targetId, offer) => sendOffer(...) 로 나중에 참조되도록 처리.
+  // 클로저 래퍼로 나중에 참조되도록 처리.
   const {
-    handleRoomJoined,
-    handleOffer,
-    handleAnswer,
-    handleIceCandidate,
+    initiateConnectionsWithExistingPeers,
+    acceptProposalAndRespond,
+    finalizeConnection,
+    addNetworkPath,
     cleanupPeer,
     cleanupAllPeers,
+    startScreenShare,
+    stopScreenShare,
   } = useWebRTC({
     localStream,
-    sendOffer: (targetId, offer) => sendOffer(targetId, offer),
-    sendAnswer: (targetId, answer) => sendAnswer(targetId, answer),
-    sendIceCandidate: (targetId, candidate) => sendIceCandidate(targetId, candidate),
+    sendOffer: (targetId, offer) => sendConnectionProposal(targetId, offer),
+    sendAnswer: (targetId, answer) => sendConnectionResponse(targetId, answer),
+    sendIceCandidate: (targetId, candidate) =>
+      sendNetworkPath(targetId, candidate),
   });
 
   // ── 3단계: 소켓 연결 + 시그널링 이벤트 바인딩 ─────────────────────────
   // useWebRTC에서 반환된 핸들러들을 onXxx 콜백으로 주입.
   // 소켓이 connect 되면 자동으로 join-room을 emit.
-  const { sendOffer, sendAnswer, sendIceCandidate } = useSocket({
+  const {
+    socket,
+    sendConnectionProposal,
+    sendConnectionResponse,
+    sendNetworkPath,
+  } = useSocket({
     roomId,
     userName,
     joinMode,
-    onRoomJoined: handleRoomJoined,       // room-joined → 기존 참가자에게 offer 전송
+    onRoomJoined: initiateConnectionsWithExistingPeers, // room-joined → 기존 참가자에게 연결 시작
     onUserLeft: (socketId) => cleanupPeer(socketId), // user-left → peer 연결 종료
-    onOffer: handleOffer,                 // offer 수신 → answer 생성/전송
-    onAnswer: handleAnswer,               // answer 수신 → remoteDescription 설정
-    onIceCandidate: handleIceCandidate,   // ice-candidate 수신 → addIceCandidate
+    onOffer: acceptProposalAndRespond, // offer 수신 → 제안 수락 및 응답
+    onAnswer: finalizeConnection, // answer 수신 → 연결 완료
+    onIceCandidate: addNetworkPath, // ice-candidate 수신 → 네트워크 경로 추가
   });
 
   // ── store 구독 (렌더링용 상태) ──────────────────────────────────────────
@@ -80,52 +89,86 @@ export default function RoomPage() {
   // participantStore에 미리 정의된 셀렉터는 내부에서 안정적으로 처리됨
   const participants = useParticipantList();
   // 연결 상태: 'connecting' | 'connected' | 'error' | 'idle'
-  const connectionStatus = useConnectionStore((state) => state.connectionStatus);
+  const connectionStatus = useConnectionStore(
+    (state) => state.connectionStatus,
+  );
   // 마이크/카메라 ON/OFF 상태 (버튼 활성화 스타일 적용용)
   // useMyMediaState: mediaStore에 미리 정의된 useShallow 셀렉터 — 객체 반환 시 무한루프 방지
-  const { isAudioEnabled, isVideoEnabled } = useMyMediaState();
+  const { isAudioEnabled, isVideoEnabled, isScreenSharing } = useMyMediaState();
+
+  const screenStreamRef = useRef<MediaStream | null>(null);
 
   // ── 컨트롤 핸들러 ───────────────────────────────────────────────────────
 
   // 마이크 토글: track.enabled 직접 제어 (track.stop()이 아님 — 재활성화 가능)
   // track.stop()은 하드웨어를 완전히 해제하므로 다시 켜려면 getUserMedia 재호출 필요.
   const toggleAudio = () => {
-    const { localStream: stream, isAudioEnabled: enabled, setAudioEnabled } =
-      useMediaStore.getState();
+    const {
+      localStream: stream,
+      isAudioEnabled: enabled,
+      setAudioEnabled,
+    } = useMediaStore.getState();
     stream?.getAudioTracks().forEach((t) => {
       t.enabled = !enabled; // false면 무음 전송, true면 정상 전송
     });
     setAudioEnabled(!enabled); // store 업데이트 → 버튼 UI 반영
+
+    socket.current?.emit("toggle-audio", !enabled);
   };
 
   // 카메라 토글: 마이크 토글과 동일한 패턴
   const toggleVideo = () => {
-    const { localStream: stream, isVideoEnabled: enabled, setVideoEnabled } =
-      useMediaStore.getState();
+    const {
+      localStream: stream,
+      isVideoEnabled: enabled,
+      setVideoEnabled,
+    } = useMediaStore.getState();
     stream?.getVideoTracks().forEach((t) => {
       t.enabled = !enabled;
     });
     setVideoEnabled(!enabled);
+
+    socket.current?.emit("toggle-video", !enabled);
   };
 
   // 나가기: 모든 peer 연결 종료 후 홈으로 이동
   // useMedia의 cleanup(resetMedia)은 컴포넌트 언마운트 시 자동 실행됨
   const handleLeave = () => {
     cleanupAllPeers(); // 모든 RTCPeerConnection.close()
-    router.push('/');
+    router.push("/");
   };
 
   // 비디오 그리드 레이아웃 클래스: 참가자 수에 따라 다른 CSS 적용
   const participantCount = participants.length + 1; // 나 포함한 전체 수
 
+  // 화면 공유 토글: 시작 시 getDisplayMedia → replaceTrack, 종료 시 카메라 트랙 복원
+  const toggleScreenShare = async () => {
+    const { isScreenSharing, setScreenSharing } = useMediaStore.getState();
+
+    if (!isScreenSharing) {
+      const stream = await startScreenShare();
+      if (!stream) return;
+      screenStreamRef.current = stream;
+      setScreenSharing(true);
+      socket.current?.emit("toggle-screen-share", true);
+    } else {
+      if (screenStreamRef.current) {
+        stopScreenShare(screenStreamRef.current);
+        screenStreamRef.current = null;
+      }
+      setScreenSharing(false);
+      socket.current?.emit("toggle-screen-share", false);
+    }
+  };
+
   return (
     <div className="room-container">
       {/* 연결 중 오버레이 */}
-      {connectionStatus === 'connecting' && (
+      {connectionStatus === "connecting" && (
         <div className="room-connecting">연결 중...</div>
       )}
       {/* 연결 실패 오버레이 */}
-      {connectionStatus === 'error' && (
+      {connectionStatus === "error" && (
         <div className="room-error">연결에 실패했습니다.</div>
       )}
 
@@ -140,7 +183,9 @@ export default function RoomPage() {
             ) : (
               // 권한 요청 중 or 실패 → 이니셜 아바타 표시
               <div className="video-tile__placeholder">
-                <span className="video-tile__avatar">{userName[0].toUpperCase()}</span>
+                <span className="video-tile__avatar">
+                  {userName[0].toUpperCase()}
+                </span>
               </div>
             )}
             <div className="video-tile__info">
@@ -167,8 +212,8 @@ export default function RoomPage() {
           {/* 마이크 토글: active 클래스로 ON/OFF 스타일 구분 */}
           <button
             type="button"
-            className={`controls__btn ${isAudioEnabled ? 'controls__btn--active' : ''}`}
-            aria-label={isAudioEnabled ? '마이크 끄기' : '마이크 켜기'}
+            className={`controls__btn ${isAudioEnabled ? "controls__btn--active" : ""}`}
+            aria-label={isAudioEnabled ? "마이크 끄기" : "마이크 켜기"}
             onClick={toggleAudio}
           >
             <MicIcon />
@@ -177,15 +222,20 @@ export default function RoomPage() {
           {/* 카메라 토글 */}
           <button
             type="button"
-            className={`controls__btn ${isVideoEnabled ? 'controls__btn--active' : ''}`}
-            aria-label={isVideoEnabled ? '카메라 끄기' : '카메라 켜기'}
+            className={`controls__btn ${isVideoEnabled ? "controls__btn--active" : ""}`}
+            aria-label={isVideoEnabled ? "카메라 끄기" : "카메라 켜기"}
             onClick={toggleVideo}
           >
             <CameraIcon />
           </button>
 
-          {/* 화면 공유 (5단계에서 구현 예정) */}
-          <button type="button" className="controls__btn" aria-label="화면 공유">
+          {/* 화면 공유 */}
+          <button
+            type="button"
+            className={`controls__btn ${isScreenSharing ? "controls__btn--active" : ""}`}
+            aria-label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
+            onClick={toggleScreenShare}
+          >
             <ScreenShareIcon />
           </button>
 
@@ -202,7 +252,9 @@ export default function RoomPage() {
 
         {/* 우측: 참가자 수 표시 */}
         <div className="controls__right">
-          <span className="controls__participant-count">{participantCount}명 참여 중</span>
+          <span className="controls__participant-count">
+            {participantCount}명 참여 중
+          </span>
         </div>
       </footer>
     </div>
@@ -244,7 +296,9 @@ function LocalVideo({ stream }: { stream: MediaStream }) {
 
 function RemoteVideo({ socketId, name }: { socketId: string; name: string }) {
   // pc.ontrack 이벤트로 스트림이 수신되면 store에 저장되고 여기서 구독됨
-  const remoteStream = useMediaStore((state) => state.remoteStreams.get(socketId));
+  const remoteStream = useMediaStore((state) =>
+    state.remoteStreams.get(socketId),
+  );
 
   return (
     <div className="video-tile">

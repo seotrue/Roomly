@@ -30,15 +30,15 @@ type UseSocketParams = {
   roomId: string;
   userName: string;
   joinMode: "create" | "join";
-  // 서버로부터 'room-joined' 수신 시 → 기존 참가자들에게 offer 전송 (useWebRTC.handleRoomJoined)
+  // 서버로부터 'room-joined' 수신 시 → 기존 참가자들에게 연결 시작 (useWebRTC.initiateConnectionsWithExistingPeers)
   onRoomJoined: (participants: RoomParticipant[]) => void;
   // 서버로부터 'user-left' 수신 시 → 해당 peer 연결 종료 (useWebRTC.cleanupPeer)
   onUserLeft: (socketId: string) => void;
-  // 서버로부터 'offer' 수신 시 → answer 생성 후 전송 (useWebRTC.handleOffer)
+  // 서버로부터 'offer' 수신 시 → 제안 수락 및 응답 전송 (useWebRTC.acceptProposalAndRespond)
   onOffer: (fromId: string, offer: RTCSessionDescriptionInit) => void;
-  // 서버로부터 'answer' 수신 시 → remoteDescription 설정 (useWebRTC.handleAnswer)
+  // 서버로부터 'answer' 수신 시 → 연결 완료 (useWebRTC.finalizeConnection)
   onAnswer: (fromId: string, answer: RTCSessionDescriptionInit) => void;
-  // 서버로부터 'ice-candidate' 수신 시 → addIceCandidate (useWebRTC.handleIceCandidate)
+  // 서버로부터 'ice-candidate' 수신 시 → 네트워크 경로 추가 (useWebRTC.addNetworkPath)
   onIceCandidate: (fromId: string, candidate: RTCIceCandidateInit) => void;
 };
 
@@ -56,7 +56,8 @@ export const useSocket = ({
 
   // ── Stale Closure 방지: 콜백 ref ────────────────────────────────────────
   // useEffect 내부 이벤트 핸들러는 최초 마운트 시 함수 참조를 캡처함.
-  // 이후 부모 컴포넌트가 리렌더되어 새로운 함수가 내려와도 캡처된 참조는 변하지 않음.
+  // 이후 부모 컴포넌트가 리렌더되어 새로운 함수가 내려와도 캡처된 참조는
+  // 변하지 않음.
   // → ref에 저장하고 매 렌더마다 갱신하면 이벤트 핸들러가 항상 최신 함수를 호출함.
   const onRoomJoinedRef = useRef(onRoomJoined);
   const onUserLeftRef = useRef(onUserLeft);
@@ -87,8 +88,13 @@ export const useSocket = ({
     //   그러면 소켓이 재생성되는 문제 발생
     const { setRoomInfo, setConnectionStatus, setErrorMessage } =
       useConnectionStore.getState();
-    const { setParticipants, addParticipant, removeParticipant } =
-      useParticipantStore.getState();
+    const {
+      setParticipants,
+      addParticipant,
+      removeParticipant,
+      updateParticipantMedia,
+      updateParticipantScreenShare,
+    } = useParticipantStore.getState();
 
     // 연결 시작을 사용자에게 알림 (로딩 UI 표시용)
     setConnectionStatus("connecting");
@@ -120,7 +126,7 @@ export const useSocket = ({
         })),
       );
 
-      // useWebRTC가 기존 참가자들에게 offer를 보내도록 위임
+      // useWebRTC가 기존 참가자들에게 연결 제안을 보내도록 위임
       onRoomJoinedRef.current(existingParticipants);
     });
 
@@ -132,8 +138,8 @@ export const useSocket = ({
     });
 
     // ── user-joined: 다른 사람이 방에 입장 ───────────────────────────────
-    // 새로 들어온 사람이 나에게 offer를 보내올 것이므로,
-    // 여기서는 store에 참가자 추가만 하고 WebRTC 연결 준비는 offer 수신 시 처리.
+    // 새로 들어온 사람이 나에게 연결 제안을 보내올 것이므로,
+    // 여기서는 store에 참가자 추가만 하고 WebRTC 연결 준비는 제안 수신 시 처리.
     s.on("user-joined", (socketId: string, joinedUserName: string) => {
       addParticipant({
         id: socketId,
@@ -146,27 +152,40 @@ export const useSocket = ({
 
     // ── user-left: 참가자 퇴장 ────────────────────────────────────────────
     // 1) store에서 참가자 제거 → VideoTile이 사라짐
-    // 2) useWebRTC.cleanupPeer 호출 → RTCPeerConnection 종료 + 스트림 해제
+    // 2) cleanupPeer 호출 → RTCPeerConnection 종료 + 스트림 해제
     s.on("user-left", (socketId: string) => {
       removeParticipant(socketId);
       onUserLeftRef.current(socketId);
     });
 
+    s.on(
+      "media-state-changed",
+      (socketId: string, state: { audio?: boolean; video?: boolean }) => {
+        updateParticipantMedia(socketId, state.audio, state.video);
+      },
+    );
+
+    s.on("screen-share-changed", (socketId: string, enabled: boolean) => {
+      updateParticipantScreenShare(socketId, enabled);
+    });
+
+    //
+
     // ── WebRTC 시그널링 수신 → useWebRTC 핸들러로 위임 ───────────────────
     // 서버는 offer/answer/ice-candidate를 단순 중계(relay)만 함.
     // 실제 처리는 useWebRTC의 각 핸들러가 담당.
 
-    // offer: 기존 참가자가 나에게 연결을 요청 → answer 생성 후 응답
+    // offer: 기존 참가자가 나에게 연결을 제안 → 수락하고 응답 전송
     s.on("offer", (fromId: string, offer: RTCSessionDescriptionInit) => {
       onOfferRef.current(fromId, offer);
     });
 
-    // answer: 내가 보낸 offer에 대한 응답 → remoteDescription 설정
+    // answer: 내가 보낸 제안에 대한 응답 → 연결 완료
     s.on("answer", (fromId: string, answer: RTCSessionDescriptionInit) => {
       onAnswerRef.current(fromId, answer);
     });
 
-    // ice-candidate: 상대방이 찾은 네트워크 경로 후보 → addIceCandidate
+    // ice-candidate: 상대방이 찾은 네트워크 경로 후보 → 경로 추가
     s.on("ice-candidate", (fromId: string, candidate: RTCIceCandidateInit) => {
       onIceCandidateRef.current(fromId, candidate);
     });
@@ -190,18 +209,24 @@ export const useSocket = ({
   // → useWebRTC와 소켓 구현이 분리됨 (테스트 용이성, 관심사 분리)
   // ─────────────────────────────────────────────────────────────────────────
 
-  // 내가 생성한 offer를 특정 대상에게 전송
-  const sendOffer = (targetId: string, offer: RTCSessionDescriptionInit) => {
+  // 내가 생성한 연결 제안을 특정 대상에게 전송
+  const sendConnectionProposal = (
+    targetId: string,
+    offer: RTCSessionDescriptionInit,
+  ) => {
     socket.current?.emit("offer", targetId, offer);
   };
 
-  // 상대방의 offer에 대한 answer를 전송
-  const sendAnswer = (targetId: string, answer: RTCSessionDescriptionInit) => {
+  // 상대방의 제안에 대한 응답을 전송
+  const sendConnectionResponse = (
+    targetId: string,
+    answer: RTCSessionDescriptionInit,
+  ) => {
     socket.current?.emit("answer", targetId, answer);
   };
 
-  // 수집된 ICE candidate를 상대방에게 전송
-  const sendIceCandidate = (
+  // 수집된 네트워크 경로를 상대방에게 전송
+  const sendNetworkPath = (
     targetId: string,
     candidate: RTCIceCandidateInit,
   ) => {
@@ -209,9 +234,9 @@ export const useSocket = ({
   };
 
   return {
-    socket,            // 필요 시 직접 소켓 접근용 (toggle-audio 등)
-    sendOffer,         // useWebRTC에 주입
-    sendAnswer,        // useWebRTC에 주입
-    sendIceCandidate,  // useWebRTC에 주입
+    socket, // 필요 시 직접 소켓 접근용 (toggle-audio 등)
+    sendConnectionProposal, // useWebRTC에 주입
+    sendConnectionResponse, // useWebRTC에 주입
+    sendNetworkPath, // useWebRTC에 주입
   };
 };

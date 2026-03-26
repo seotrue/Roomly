@@ -1,7 +1,7 @@
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
-import { useShallow } from 'zustand/react/shallow';
-import { Participant } from '@/types/room';
+import { create } from "zustand";
+import { devtools } from "zustand/middleware";
+import { useShallow } from "zustand/react/shallow";
+import { Participant } from "@/types/room";
 
 // ─────────────────────────────────────────────
 // 참가자 목록 관리
@@ -29,9 +29,12 @@ type ParticipantActions = {
   // 상대방의 마이크/카메라 상태가 바뀌면 해당 참가자 정보만 업데이트
   updateParticipantMedia: (
     socketId: string,
-    audio: boolean,
-    video: boolean
+    audio?: boolean,
+    video?: boolean,
   ) => void;
+
+  // screen-share-changed 이벤트 수신 시 호출
+  updateParticipantScreenShare: (socketId: string, enabled: boolean) => void;
 
   // 방 퇴장 시 참가자 목록 초기화
   resetParticipants: () => void;
@@ -45,7 +48,9 @@ const initialState: ParticipantState = {
 // Store 생성
 // ─────────────────────────────────────────────
 
-export const useParticipantStore = create<ParticipantState & ParticipantActions>()(
+export const useParticipantStore = create<
+  ParticipantState & ParticipantActions
+>()(
   devtools(
     (set) => ({
       ...initialState,
@@ -58,7 +63,7 @@ export const useParticipantStore = create<ParticipantState & ParticipantActions>
             participants: new Map(participants.map((p) => [p.id, p])),
           },
           false,
-          'setParticipants'
+          "setParticipants",
         ),
 
       addParticipant: (participant) =>
@@ -68,11 +73,11 @@ export const useParticipantStore = create<ParticipantState & ParticipantActions>
             // → 반드시 new Map()으로 복사 후 수정
             participants: new Map(state.participants).set(
               participant.id,
-              participant
+              participant,
             ),
           }),
           false,
-          'addParticipant'
+          "addParticipant",
         ),
 
       removeParticipant: (socketId) =>
@@ -83,7 +88,7 @@ export const useParticipantStore = create<ParticipantState & ParticipantActions>
             return { participants: next };
           },
           false,
-          'removeParticipant'
+          "removeParticipant",
         ),
 
       updateParticipantMedia: (socketId, audio, video) =>
@@ -94,23 +99,39 @@ export const useParticipantStore = create<ParticipantState & ParticipantActions>
             if (!participant) return {};
 
             const next = new Map(state.participants);
-            // 기존 participant 객체를 스프레드로 복사 후 미디어 상태만 덮어씀
+            // undefined인 항목은 기존 값 유지 (서버가 변경된 속성만 전송하기 때문)
             next.set(socketId, {
               ...participant,
-              isAudioEnabled: audio,
-              isVideoEnabled: video,
+              ...(audio !== undefined && { isAudioEnabled: audio }),
+              ...(video !== undefined && { isVideoEnabled: video }),
             });
             return { participants: next };
           },
           false,
-          'updateParticipantMedia'
+          "updateParticipantMedia",
+        ),
+
+      updateParticipantScreenShare: (socketId, enabled) =>
+        set(
+          (state) => {
+            const participant = state.participants.get(socketId);
+            if (!participant) return {};
+            const next = new Map(state.participants);
+            next.set(socketId, {
+              ...participant,
+              isScreenSharing: enabled,
+            });
+            return { participants: next };
+          },
+          false,
+          "updateParticipantScreenShare",
         ),
 
       resetParticipants: () =>
-        set({ ...initialState }, false, 'resetParticipants'),
+        set({ ...initialState }, false, "resetParticipants"),
     }),
-    { name: 'ParticipantStore' }
-  )
+    { name: "ParticipantStore" },
+  ),
 );
 
 // ─────────────────────────────────────────────
