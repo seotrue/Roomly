@@ -93,6 +93,7 @@ export const useSocket = ({
       addParticipant,
       removeParticipant,
       updateParticipantMedia,
+      updateParticipantScreenShare,
     } = useParticipantStore.getState();
 
     // 연결 시작을 사용자에게 알림 (로딩 UI 표시용)
@@ -160,13 +161,15 @@ export const useSocket = ({
     s.on(
       "media-state-changed",
       (socketId: string, state: { audio?: boolean; video?: boolean }) => {
-        updateParticipantMedia(
-          socketId,
-          state.audio ?? true,
-          state.video ?? true,
-        );
+        updateParticipantMedia(socketId, state.audio, state.video);
       },
     );
+
+    s.on("screen-share-changed", (socketId: string, enabled: boolean) => {
+      updateParticipantScreenShare(socketId, enabled);
+    });
+
+    //
 
     // ── WebRTC 시그널링 수신 → useWebRTC 핸들러로 위임 ───────────────────
     // 서버는 offer/answer/ice-candidate를 단순 중계(relay)만 함.

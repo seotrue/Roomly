@@ -8,6 +8,7 @@ import { useParticipantList } from "@/store/room/participantStore";
 import { useConnectionStore } from "@/store/room/connectionStore";
 import { useMediaStore, useMyMediaState } from "@/store/room/mediaStore";
 import "@/styles/room.scss";
+import { useRef } from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RoomPage
@@ -53,6 +54,8 @@ export default function RoomPage() {
     addNetworkPath,
     cleanupPeer,
     cleanupAllPeers,
+    startScreenShare,
+    stopScreenShare,
   } = useWebRTC({
     localStream,
     sendOffer: (targetId, offer) => sendConnectionProposal(targetId, offer),
@@ -91,7 +94,9 @@ export default function RoomPage() {
   );
   // 마이크/카메라 ON/OFF 상태 (버튼 활성화 스타일 적용용)
   // useMyMediaState: mediaStore에 미리 정의된 useShallow 셀렉터 — 객체 반환 시 무한루프 방지
-  const { isAudioEnabled, isVideoEnabled } = useMyMediaState();
+  const { isAudioEnabled, isVideoEnabled, isScreenSharing } = useMyMediaState();
+
+  const screenStreamRef = useRef<MediaStream | null>(null);
 
   // ── 컨트롤 핸들러 ───────────────────────────────────────────────────────
 
@@ -135,6 +140,26 @@ export default function RoomPage() {
 
   // 비디오 그리드 레이아웃 클래스: 참가자 수에 따라 다른 CSS 적용
   const participantCount = participants.length + 1; // 나 포함한 전체 수
+
+  // 화면 공유 토글: 시작 시 getDisplayMedia → replaceTrack, 종료 시 카메라 트랙 복원
+  const toggleScreenShare = async () => {
+    const { isScreenSharing, setScreenSharing } = useMediaStore.getState();
+
+    if (!isScreenSharing) {
+      const stream = await startScreenShare();
+      if (!stream) return;
+      screenStreamRef.current = stream;
+      setScreenSharing(true);
+      socket.current?.emit("toggle-screen-share", true);
+    } else {
+      if (screenStreamRef.current) {
+        stopScreenShare(screenStreamRef.current);
+        screenStreamRef.current = null;
+      }
+      setScreenSharing(false);
+      socket.current?.emit("toggle-screen-share", false);
+    }
+  };
 
   return (
     <div className="room-container">
@@ -204,11 +229,12 @@ export default function RoomPage() {
             <CameraIcon />
           </button>
 
-          {/* 화면 공유 (5단계에서 구현 예정) */}
+          {/* 화면 공유 */}
           <button
             type="button"
-            className="controls__btn"
-            aria-label="화면 공유"
+            className={`controls__btn ${isScreenSharing ? "controls__btn--active" : ""}`}
+            aria-label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
+            onClick={toggleScreenShare}
           >
             <ScreenShareIcon />
           </button>

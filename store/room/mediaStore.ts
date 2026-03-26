@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
-import { useShallow } from 'zustand/react/shallow';
+import { create } from "zustand";
+import { devtools } from "zustand/middleware";
+import { useShallow } from "zustand/react/shallow";
 
 // ─────────────────────────────────────────────
 // 헬퍼 함수
@@ -28,6 +28,7 @@ type MediaState = {
   isAudioEnabled: boolean;
   isVideoEnabled: boolean;
   isScreenSharing: boolean;
+  screenStream: MediaStream | null;
 };
 
 type MediaActions = {
@@ -82,7 +83,7 @@ export const useMediaStore = create<MediaState & MediaActions>()(
             return { localStream: stream };
           },
           false,
-          'setLocalStream'
+          "setLocalStream",
         ),
 
       setRemoteStream: (socketId, stream) =>
@@ -91,7 +92,7 @@ export const useMediaStore = create<MediaState & MediaActions>()(
             remoteStreams: new Map(state.remoteStreams).set(socketId, stream),
           }),
           false,
-          'setRemoteStream'
+          "setRemoteStream",
         ),
 
       removeRemoteStream: (socketId) =>
@@ -105,17 +106,17 @@ export const useMediaStore = create<MediaState & MediaActions>()(
             return { remoteStreams: next };
           },
           false,
-          'removeRemoteStream'
+          "removeRemoteStream",
         ),
 
       setAudioEnabled: (enabled) =>
-        set({ isAudioEnabled: enabled }, false, 'setAudioEnabled'),
+        set({ isAudioEnabled: enabled }, false, "setAudioEnabled"),
 
       setVideoEnabled: (enabled) =>
-        set({ isVideoEnabled: enabled }, false, 'setVideoEnabled'),
+        set({ isVideoEnabled: enabled }, false, "setVideoEnabled"),
 
       setScreenSharing: (sharing) =>
-        set({ isScreenSharing: sharing }, false, 'setScreenSharing'),
+        set({ isScreenSharing: sharing }, false, "setScreenSharing"),
 
       resetMedia: () =>
         set(
@@ -139,11 +140,11 @@ export const useMediaStore = create<MediaState & MediaActions>()(
             };
           },
           false,
-          'resetMedia'
+          "resetMedia",
         ),
     }),
-    { name: 'MediaStore' }
-  )
+    { name: "MediaStore" },
+  ),
 );
 
 // ─────────────────────────────────────────────
@@ -151,8 +152,7 @@ export const useMediaStore = create<MediaState & MediaActions>()(
 // ─────────────────────────────────────────────
 
 // 내 로컬 스트림 (내 VideoTile에 사용)
-export const useLocalStream = () =>
-  useMediaStore((state) => state.localStream);
+export const useLocalStream = () => useMediaStore((state) => state.localStream);
 
 // 특정 참가자의 원격 스트림 (VideoTile의 video.srcObject에 연결)
 export const useRemoteStream = (socketId: string) =>
@@ -166,5 +166,5 @@ export const useMyMediaState = () =>
       isAudioEnabled: state.isAudioEnabled,
       isVideoEnabled: state.isVideoEnabled,
       isScreenSharing: state.isScreenSharing,
-    }))
+    })),
   );

@@ -1,6 +1,6 @@
-import { useRef } from 'react';
-import { useMediaStore } from '@/store/room/mediaStore';
-import type { RoomParticipant } from '@/server/room/room-types';
+import { useRef } from "react";
+import { useMediaStore } from "@/store/room/mediaStore";
+import type { RoomParticipant } from "@/server/room/room-types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ICE 서버 설정
@@ -18,7 +18,7 @@ import type { RoomParticipant } from '@/server/room/room-types';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: "stun:stun.l.google.com:19302" },
   // 프로덕션 시 TURN 서버 추가:
   // { urls: process.env.NEXT_PUBLIC_TURN_URL!, username: '...', credential: '...' }
 ];
@@ -66,7 +66,9 @@ export const useWebRTC = ({
   // setRemoteDescription이 완료되어야 브라우저가 candidate를 처리할 수 있음.
   // 완료 전에 addIceCandidate를 호출하면 InvalidStateError 발생.
   // → 큐에 쌓았다가 setRemoteDescription 직후에 일괄 적용.
-  const iceCandidateQueues = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+  const iceCandidateQueues = useRef<Map<string, RTCIceCandidateInit[]>>(
+    new Map(),
+  );
 
   // ─────────────────────────────────────────────────────────────────────────
   // createPeerConnection
@@ -104,8 +106,8 @@ export const useWebRTC = ({
     // 상대방이 갑자기 종료(탭 강제 종료 등)된 경우에도 처리됨.
     pc.onconnectionstatechange = () => {
       if (
-        pc.connectionState === 'disconnected' ||
-        pc.connectionState === 'failed'
+        pc.connectionState === "disconnected" ||
+        pc.connectionState === "failed"
       ) {
         cleanupPeer(targetId);
       }
@@ -122,7 +124,10 @@ export const useWebRTC = ({
   // 그 전에 도착해서 큐에 쌓인 ICE candidate들을 일괄 적용.
   // ─────────────────────────────────────────────────────────────────────────
 
-  const flushIceCandidateQueue = async (targetId: string, pc: RTCPeerConnection) => {
+  const flushIceCandidateQueue = async (
+    targetId: string,
+    pc: RTCPeerConnection,
+  ) => {
     const queue = iceCandidateQueues.current.get(targetId) ?? [];
     for (const candidate of queue) {
       await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -139,7 +144,9 @@ export const useWebRTC = ({
   // 호출 시점: 서버로부터 'room-joined' 이벤트 수신 직후
   // ─────────────────────────────────────────────────────────────────────────
 
-  const initiateConnectionsWithExistingPeers = async (existingParticipants: RoomParticipant[]) => {
+  const initiateConnectionsWithExistingPeers = async (
+    existingParticipants: RoomParticipant[],
+  ) => {
     for (const participant of existingParticipants) {
       const pc = createPeerConnection(participant.socketId);
 
@@ -249,12 +256,50 @@ export const useWebRTC = ({
     peers.current.forEach((_, socketId) => cleanupPeer(socketId));
   };
 
+  // 공유 시작
+  // RTCPeerConnection이 뭔데?
+  // WebRTC에서 두 브라우저를 직접 연결하는 객체입니다.
+
+  // 이 객체를 통해 영상/음성 데이터가 서버를 거치지 않고 직접 전송됨
+  // 각 참가자마다 별도의 RTCPeerConnection이 필요
+  const startScreenShare = async (): Promise<MediaStream | null> => {
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: false,
+    });
+
+    const screenTrack = screenStream.getTracks()[0];
+    //peers는 다른 참가자들과의 RTCPeerConnection 객체들을 담은 Map입니다.
+    peers.current.forEach((pc, socketId) => {
+      const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+      sender?.replaceTrack(screenTrack);
+    });
+
+    screenTrack.onended = () => stopScreenShare(screenStream);
+
+    return screenStream;
+  };
+
+  const stopScreenShare = (screenStream: MediaStream) => {
+    const cameraTrack =
+      useMediaStore.getState().localStream?.getVideoTracks()[0] ?? null;
+
+    peers.current.forEach((pc) => {
+      const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+      sender?.replaceTrack(cameraTrack);
+    });
+
+    screenStream.getTracks().forEach((t) => t.stop());
+  };
+
   return {
-    initiateConnectionsWithExistingPeers,   // page.tsx → useSocket onRoomJoined에 주입
-    acceptProposalAndRespond,               // page.tsx → useSocket onOffer에 주입
-    finalizeConnection,                     // page.tsx → useSocket onAnswer에 주입
-    addNetworkPath,                         // page.tsx → useSocket onIceCandidate에 주입
-    cleanupPeer,                            // page.tsx → useSocket onUserLeft에 주입
-    cleanupAllPeers,                        // page.tsx → 나가기 버튼 클릭 시 호출
+    initiateConnectionsWithExistingPeers, // page.tsx → useSocket onRoomJoined에 주입
+    acceptProposalAndRespond, // page.tsx → useSocket onOffer에 주입
+    finalizeConnection, // page.tsx → useSocket onAnswer에 주입
+    addNetworkPath, // page.tsx → useSocket onIceCandidate에 주입
+    cleanupPeer, // page.tsx → useSocket onUserLeft에 주입
+    cleanupAllPeers,
+    startScreenShare,
+    stopScreenShare,
   };
 };

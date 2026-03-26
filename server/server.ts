@@ -1,15 +1,22 @@
-import express from 'express';
-import { createServer } from 'http';
-import { Server, Socket } from 'socket.io';
-import next from 'next';
-import { handleJoinRoom, handleLeaveRoom, getRoomInfo, getSocketRoomId, arePeersInSameRoom, handleCreateRoom } from './room/room-service';
-import { normalizeRoomId } from './room/room-utils';
-import type { JoinRoomPayload } from './room/room-types';
+import express from "express";
+import { createServer } from "http";
+import { Server, Socket } from "socket.io";
+import next from "next";
+import {
+  handleJoinRoom,
+  handleLeaveRoom,
+  getRoomInfo,
+  getSocketRoomId,
+  arePeersInSameRoom,
+  handleCreateRoom,
+} from "./room/room-service";
+import { normalizeRoomId } from "./room/room-utils";
+import type { JoinRoomPayload } from "./room/room-types";
 
-const dev = process.env.NODE_ENV !== 'production';
+const dev = process.env.NODE_ENV !== "production";
 const nextApp = next({ dev });
 const handle = nextApp.getRequestHandler();
-const PORT = parseInt(process.env.PORT ?? '3000', 10);
+const PORT = parseInt(process.env.PORT ?? "3000", 10);
 
 nextApp.prepare().then(() => {
   const expressApp = express();
@@ -17,8 +24,8 @@ nextApp.prepare().then(() => {
 
   const io = new Server(httpServer, {
     cors: {
-      origin: '*',
-      methods: ['GET', 'POST'],
+      origin: "*",
+      methods: ["GET", "POST"],
     },
   });
 
@@ -26,7 +33,7 @@ nextApp.prepare().then(() => {
   // REST API
   // ─────────────────────────────────────────
 
-  expressApp.get('/api/rooms/:roomId', (req, res) => {
+  expressApp.get("/api/rooms/:roomId", (req, res) => {
     const { roomId } = req.params;
     const roomInfo = getRoomInfo(roomId);
 
@@ -38,13 +45,13 @@ nextApp.prepare().then(() => {
     res.json(roomInfo);
   });
 
-  expressApp.post('/api/rooms', (_req, res) => {
+  expressApp.post("/api/rooms", (_req, res) => {
     try {
       const result = handleCreateRoom();
       res.status(201).json(result);
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: '방을 생성할 수 없습니다.' });
+      res.status(500).json({ error: "방을 생성할 수 없습니다." });
     }
   });
 
@@ -52,15 +59,15 @@ nextApp.prepare().then(() => {
   // Socket.io 이벤트
   // ─────────────────────────────────────────
 
-  io.on('connection', (socket: Socket) => {
+  io.on("connection", (socket: Socket) => {
     console.log(`[socket] connected: ${socket.id}`);
 
     // ── join-room ──────────────────────────
-    socket.on('join-room', (payload: JoinRoomPayload) => {
+    socket.on("join-room", (payload: JoinRoomPayload) => {
       const result = handleJoinRoom(socket.id, payload);
 
       if (!result.success) {
-        socket.emit('join-room-error', result.errorMessage);
+        socket.emit("join-room-error", result.errorMessage);
         return;
       }
 
@@ -68,62 +75,87 @@ nextApp.prepare().then(() => {
       socket.join(normalizedRoomId);
 
       // 나에게: 기존 참가자 목록 전달
-      socket.emit('room-joined', result.existingParticipants);
+      socket.emit("room-joined", result.existingParticipants);
 
       // 기존 참가자들에게: 새 참가자 알림
-      socket.to(normalizedRoomId).emit('user-joined', socket.id, payload.userName.trim());
+      socket
+        .to(normalizedRoomId)
+        .emit("user-joined", socket.id, payload.userName.trim());
     });
 
     // ── offer ──────────────────────────────
-    socket.on('offer', (targetId: string, offer: RTCSessionDescriptionInit) => {
+    socket.on("offer", (targetId: string, offer: RTCSessionDescriptionInit) => {
       if (!arePeersInSameRoom(socket.id, targetId)) {
-        console.warn(`[signal] offer rejected: ${socket.id} and ${targetId} are not in the same room`);
+        console.warn(
+          `[signal] offer rejected: ${socket.id} and ${targetId} are not in the same room`,
+        );
         return;
       }
       console.log(`[signal] offer: ${socket.id} -> ${targetId}`);
-      io.to(targetId).emit('offer', socket.id, offer);
+      io.to(targetId).emit("offer", socket.id, offer);
     });
 
     // ── answer ─────────────────────────────
-    socket.on('answer', (targetId: string, answer: RTCSessionDescriptionInit) => {
-      if (!arePeersInSameRoom(socket.id, targetId)) {
-        console.warn(`[signal] answer rejected: ${socket.id} and ${targetId} are not in the same room`);
-        return;
-      }
-      console.log(`[signal] answer: ${socket.id} -> ${targetId}`);
-      io.to(targetId).emit('answer', socket.id, answer);
-    });
+    socket.on(
+      "answer",
+      (targetId: string, answer: RTCSessionDescriptionInit) => {
+        if (!arePeersInSameRoom(socket.id, targetId)) {
+          console.warn(
+            `[signal] answer rejected: ${socket.id} and ${targetId} are not in the same room`,
+          );
+          return;
+        }
+        console.log(`[signal] answer: ${socket.id} -> ${targetId}`);
+        io.to(targetId).emit("answer", socket.id, answer);
+      },
+    );
 
     // ── ice-candidate ──────────────────────
-    socket.on('ice-candidate', (targetId: string, candidate: RTCIceCandidateInit) => {
-      if (!arePeersInSameRoom(socket.id, targetId)) {
-        console.warn(`[signal] ice-candidate rejected: ${socket.id} and ${targetId} are not in the same room`);
-        return;
-      }
-      io.to(targetId).emit('ice-candidate', socket.id, candidate);
-    });
+    socket.on(
+      "ice-candidate",
+      (targetId: string, candidate: RTCIceCandidateInit) => {
+        if (!arePeersInSameRoom(socket.id, targetId)) {
+          console.warn(
+            `[signal] ice-candidate rejected: ${socket.id} and ${targetId} are not in the same room`,
+          );
+          return;
+        }
+        io.to(targetId).emit("ice-candidate", socket.id, candidate);
+      },
+    );
 
     // ── toggle-audio ───────────────────────
-    socket.on('toggle-audio', (enabled: boolean) => {
+    socket.on("toggle-audio", (enabled: boolean) => {
       const roomId = getSocketRoomId(socket.id);
       if (!roomId) return;
-      socket.to(roomId).emit('media-state-changed', socket.id, { audio: enabled });
+      socket
+        .to(roomId)
+        .emit("media-state-changed", socket.id, { audio: enabled });
     });
 
     // ── toggle-video ───────────────────────
-    socket.on('toggle-video', (enabled: boolean) => {
+    socket.on("toggle-video", (enabled: boolean) => {
       const roomId = getSocketRoomId(socket.id);
       if (!roomId) return;
-      socket.to(roomId).emit('media-state-changed', socket.id, { video: enabled });
+      socket
+        .to(roomId)
+        .emit("media-state-changed", socket.id, { video: enabled });
+    });
+
+    // ── toggle-screen-share ────────────────
+    socket.on("toggle-screen-share", (enabled: boolean) => {
+      const roomId = getSocketRoomId(socket.id);
+      if (!roomId) return;
+      socket.to(roomId).emit("screen-share-changed", socket.id, enabled);
     });
 
     // ── leave-room ─────────────────────────
-    socket.on('leave-room', () => {
+    socket.on("leave-room", () => {
       leaveAndNotify(socket);
     });
 
     // ── disconnect ─────────────────────────
-    socket.on('disconnect', () => {
+    socket.on("disconnect", () => {
       console.log(`[socket] disconnected: ${socket.id}`);
       leaveAndNotify(socket);
     });
@@ -141,7 +173,7 @@ nextApp.prepare().then(() => {
     if (!result) return;
 
     socket.leave(result.roomId);
-    io.to(result.roomId).emit('user-left', socket.id);
+    io.to(result.roomId).emit("user-left", socket.id);
   }
 
   // ─────────────────────────────────────────
