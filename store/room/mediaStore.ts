@@ -64,6 +64,7 @@ const initialState: MediaState = {
   isAudioEnabled: true, // 입장 시 마이크 기본 ON
   isVideoEnabled: true, // 입장 시 카메라 기본 ON
   isScreenSharing: false,
+  screenStream: null,
 };
 
 // ─────────────────────────────────────────────
