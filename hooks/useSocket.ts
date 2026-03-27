@@ -80,8 +80,8 @@ export const useSocket = ({
     // ── 소켓 연결 ────────────────────────────────────────────────────────
     // NEXT_PUBLIC_API_URL 이 설정되어 있으면 해당 URL로, 없으면 localhost:3000
     // Next.js + Socket.io가 포트 3000에서 함께 동작하므로 경로 분리 불필요
-    const s = io(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000");
-    socket.current = s;
+    const socketInstance = io(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000");
+    socket.current = socketInstance;
 
     // store 액션을 useEffect 안에서 getState()로 직접 접근
     // → hook 레벨에서 구독하면 useEffect deps 배열에 추가해야 하고,
@@ -102,16 +102,16 @@ export const useSocket = ({
     // ── connect: 소켓 연결 완료 → 방 입장 요청 ───────────────────────────
     // 소켓 연결이 완료된 시점에 join-room을 emit해야 socket.id가 확정되어 있음.
     // useEffect 바깥에서 emit하면 아직 연결 전일 수 있음.
-    s.on("connect", () => {
-      s.emit("join-room", { roomId, userName, joinMode });
+    socketInstance.on("connect", () => {
+      socketInstance.emit("join-room", { roomId, userName, joinMode });
     });
 
     // ── room-joined: 방 입장 성공 ─────────────────────────────────────────
     // 서버가 방 입장을 허용하면 기존 참가자 목록과 함께 이 이벤트를 보냄.
     // 1) store에 내 정보 + 참가자 목록 저장
     // 2) useWebRTC.handleRoomJoined 호출 → 기존 참가자들에게 offer 전송
-    s.on("room-joined", (existingParticipants: RoomParticipant[]) => {
-      setRoomInfo(roomId, s.id ?? "", userName);
+    socketInstance.on("room-joined", (existingParticipants: RoomParticipant[]) => {
+      setRoomInfo(roomId, socketInstance.id ?? "", userName);
       setConnectionStatus("connected");
 
       // RoomParticipant(서버 타입) → Participant(클라이언트 타입) 변환
@@ -132,7 +132,7 @@ export const useSocket = ({
 
     // ── join-room-error: 방 입장 실패 ────────────────────────────────────
     // join 모드에서 방이 존재하지 않거나, 정원 초과 등의 경우 서버가 에러를 보냄
-    s.on("join-room-error", (message: string) => {
+    socketInstance.on("join-room-error", (message: string) => {
       setConnectionStatus("error");
       setErrorMessage(message);
     });
@@ -140,7 +140,7 @@ export const useSocket = ({
     // ── user-joined: 다른 사람이 방에 입장 ───────────────────────────────
     // 새로 들어온 사람이 나에게 연결 제안을 보내올 것이므로,
     // 여기서는 store에 참가자 추가만 하고 WebRTC 연결 준비는 제안 수신 시 처리.
-    s.on("user-joined", (socketId: string, joinedUserName: string) => {
+    socketInstance.on("user-joined", (socketId: string, joinedUserName: string) => {
       addParticipant({
         id: socketId,
         name: joinedUserName,
@@ -153,19 +153,19 @@ export const useSocket = ({
     // ── user-left: 참가자 퇴장 ────────────────────────────────────────────
     // 1) store에서 참가자 제거 → VideoTile이 사라짐
     // 2) cleanupPeer 호출 → RTCPeerConnection 종료 + 스트림 해제
-    s.on("user-left", (socketId: string) => {
+    socketInstance.on("user-left", (socketId: string) => {
       removeParticipant(socketId);
       onUserLeftRef.current(socketId);
     });
 
-    s.on(
+    socketInstance.on(
       "media-state-changed",
       (socketId: string, state: { audio?: boolean; video?: boolean }) => {
         updateParticipantMedia(socketId, state.audio, state.video);
       },
     );
 
-    s.on("screen-share-changed", (socketId: string, enabled: boolean) => {
+    socketInstance.on("screen-share-changed", (socketId: string, enabled: boolean) => {
       updateParticipantScreenShare(socketId, enabled);
     });
 
@@ -176,29 +176,29 @@ export const useSocket = ({
     // 실제 처리는 useWebRTC의 각 핸들러가 담당.
 
     // offer: 기존 참가자가 나에게 연결을 제안 → 수락하고 응답 전송
-    s.on("offer", (fromId: string, offer: RTCSessionDescriptionInit) => {
+    socketInstance.on("offer", (fromId: string, offer: RTCSessionDescriptionInit) => {
       onOfferRef.current(fromId, offer);
     });
 
     // answer: 내가 보낸 제안에 대한 응답 → 연결 완료
-    s.on("answer", (fromId: string, answer: RTCSessionDescriptionInit) => {
+    socketInstance.on("answer", (fromId: string, answer: RTCSessionDescriptionInit) => {
       onAnswerRef.current(fromId, answer);
     });
 
     // ice-candidate: 상대방이 찾은 네트워크 경로 후보 → 경로 추가
-    s.on("ice-candidate", (fromId: string, candidate: RTCIceCandidateInit) => {
+    socketInstance.on("ice-candidate", (fromId: string, candidate: RTCIceCandidateInit) => {
       onIceCandidateRef.current(fromId, candidate);
     });
 
     // ── disconnect: 소켓 연결 끊김 ───────────────────────────────────────
     // 네트워크 오류, 서버 재시작 등으로 연결이 끊긴 경우
-    s.on("disconnect", () => {
+    socketInstance.on("disconnect", () => {
       useConnectionStore.getState().setConnectionStatus("idle");
     });
 
     // ── cleanup: 컴포넌트 언마운트(방 퇴장) 시 소켓 연결 종료 ───────────
     return () => {
-      s.disconnect();
+      socketInstance.disconnect();
     };
   }, []); // roomId/userName/joinMode는 마운트 시 URL에서 읽은 고정값 → 재실행 불필요
 
