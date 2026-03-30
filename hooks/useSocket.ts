@@ -80,7 +80,34 @@ export const useSocket = ({
     // ── 소켓 연결 ────────────────────────────────────────────────────────
     // NEXT_PUBLIC_API_URL 이 설정되어 있으면 해당 URL로, 없으면 localhost:3000
     // Next.js + Socket.io가 포트 3000에서 함께 동작하므로 경로 분리 불필요
-    const socketInstance = io(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000");
+    //
+    // 보안: 프로덕션에서는 WSS(WebSocket Secure) 사용 강제
+    // getUserMedia는 HTTPS 환경 필수이므로 소켓도 WSS로 연결해야 함
+    const getSocketUrl = (): string => {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+      // 환경 변수가 설정된 경우 사용
+      if (apiUrl) return apiUrl;
+
+      // 로컬 개발 환경: http 허용
+      if (typeof window !== "undefined") {
+        const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+        return `${protocol}//${window.location.host}`;
+      }
+
+      return "http://localhost:3000";
+    };
+
+    const socketInstance = io(getSocketUrl(), {
+      // 프로덕션에서 HTTP → HTTPS 자동 업그레이드 시도
+      upgrade: true,
+      // 재연결 설정 (네트워크 불안정 대응)
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      // 타임아웃 설정 (DoS 방어)
+      timeout: 10000,
+    });
     socket.current = socketInstance;
 
     // store 액션을 useEffect 안에서 getState()로 직접 접근

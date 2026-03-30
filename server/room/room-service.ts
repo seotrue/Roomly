@@ -2,6 +2,14 @@ import { roomStore } from './room-store';
 import { normalizeRoomId, isValidRoomId, isValidUserName, generateRoomId } from './room-utils';
 import type { JoinRoomPayload, JoinRoomResult, RoomParticipant, CreateRoomResult } from './room-types';
 
+// ─────────────────────────────────────────────────────────────────
+// 보안 설정
+// ─────────────────────────────────────────────────────────────────
+
+// 방당 최대 참가자 수 제한 (WebRTC Mesh 구조상 50명 이상은 비현실적)
+// 각 참가자는 N-1개의 peer connection 유지 → 메모리/CPU 급증
+const MAX_PARTICIPANTS_PER_ROOM = 50;
+
 // join-room 정책 처리
 // - create 모드: 방이 없으면 생성 후 입장, 있으면 그냥 입장
 // - join 모드: 방이 없으면 에러 반환
@@ -24,6 +32,11 @@ export function handleJoinRoom(
 
   if (payload.joinMode === 'join' && !roomExists) {
     return { success: false, errorMessage: '존재하지 않는 방입니다.' };
+  }
+
+  // 보안: 방 인원 수 제한 (DoS 방어 + 성능 보호)
+  if (roomExists && roomStore.getRoomSize(roomId) >= MAX_PARTICIPANTS_PER_ROOM) {
+    return { success: false, errorMessage: '방 인원이 가득 찼습니다.' };
   }
 
   if (!roomExists) {

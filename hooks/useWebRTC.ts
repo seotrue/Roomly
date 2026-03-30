@@ -13,15 +13,39 @@ import type { RoomParticipant } from "@/server/room/room-types";
 //   Google이 무료로 제공하는 공개 STUN 서버 사용.
 //
 // TURN 서버: STUN으로 연결 불가한 경우(대칭형 NAT 등) 데이터를 중계.
-//   프로덕션에서는 Cloudflare TURN 등 유료 서비스 필요.
-//   환경변수로 관리 (현재 미적용).
+//   프로덕션에서는 필수 (연결 성공률 99%+).
+//   Cloudflare, Twilio, 또는 coturn(오픈소스) 사용 가능.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-  // 프로덕션 시 TURN 서버 추가:
-  // { urls: process.env.NEXT_PUBLIC_TURN_URL!, username: '...', credential: '...' }
-];
+const getIceServers = (): RTCIceServer[] => {
+  const servers: RTCIceServer[] = [
+    // STUN 서버: 공인 IP 확인용 (무료)
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+  ];
+
+  // TURN 서버: NAT 통과 실패 시 중계용 (환경 변수로 설정)
+  const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
+  const turnUsername = process.env.NEXT_PUBLIC_TURN_USERNAME;
+  const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
+
+  if (turnUrl && turnUsername && turnCredential) {
+    servers.push({
+      urls: turnUrl,
+      username: turnUsername,
+      credential: turnCredential,
+    });
+    console.log("[WebRTC] TURN server configured");
+  } else {
+    console.warn(
+      "[WebRTC] TURN server not configured - some users may fail to connect behind symmetric NAT"
+    );
+  }
+
+  return servers;
+};
+
+const ICE_SERVERS = getIceServers();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // useWebRTC
