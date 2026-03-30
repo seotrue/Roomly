@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash \"/Users/jinsolseo/.claude/plugins/cache/omc/oh-my-claudecode/4.9.0/scripts/setup-progress.sh\" resume)",
+      "Bash(npm run:*)"
+    ]
+  },
+  "enabledPlugins": {}
+}
