@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
       img-src 'self' data: blob:;
       font-src 'self' data:;
       media-src 'self' blob: mediastream:;
-      connect-src 'self' ws: wss: ${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"};
+      connect-src 'self' ws: wss: https: stun: turn: turns: ${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"};
       frame-ancestors 'none';
       base-uri 'self';
       form-action 'self';
