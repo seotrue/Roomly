@@ -67,7 +67,7 @@ export default function HomePage() {
               placeholder="초대받은 방 ID를 입력하세요"
               value={roomId}
               error={errors.roomId}
-              maxLength={20}
+              maxLength={36}
               onChange={handleRoomIdChange}
             />
           )}
