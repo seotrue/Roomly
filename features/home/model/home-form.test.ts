@@ -140,9 +140,9 @@ describe('sanitizeRoomIdInput', () => {
     expect(result).toBe('room123');
   });
 
-  it('should strip hyphens', () => {
+  it('should allow hyphens (for UUID format)', () => {
     const result = sanitizeRoomIdInput('room-123');
-    expect(result).toBe('room123');
+    expect(result).toBe('room-123');
   });
 
   it('should strip underscores', () => {
@@ -161,7 +161,7 @@ describe('sanitizeRoomIdInput', () => {
   });
 
   it('should return an empty string when all characters are disallowed', () => {
-    const result = sanitizeRoomIdInput('!!! ---');
+    const result = sanitizeRoomIdInput('!!! ___');
     expect(result).toBe('');
   });
 
@@ -172,7 +172,7 @@ describe('sanitizeRoomIdInput', () => {
 
   it('should handle a mix of allowed and disallowed characters', () => {
     const result = sanitizeRoomIdInput('A-B_C 1.2.3');
-    expect(result).toBe('abc123');
+    expect(result).toBe('a-bc123'); // hyphens allowed, underscores/spaces/dots removed
   });
 
   it('should handle numeric-only input without modification', () => {

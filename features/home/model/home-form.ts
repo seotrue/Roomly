@@ -30,9 +30,9 @@ export function normalizeRoomId(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
-/** 방 ID 입력 중 허용 문자(영문 소문자, 숫자)만 통과 */
+/** 방 ID 입력 중 허용 문자(영문 소문자, 숫자, 하이픈)만 통과 */
 export function sanitizeRoomIdInput(raw: string): string {
-  return raw.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return raw.toLowerCase().replace(/[^a-z0-9-]/g, '');
 }
 
 // ─────────────────────────────────────────────
