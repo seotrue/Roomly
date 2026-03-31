@@ -7,6 +7,7 @@
  */
 
 import express from 'express';
+import cors from 'cors';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import {
@@ -25,6 +26,15 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:3000';
 
 const expressApp = express();
 const httpServer = createServer(expressApp);
+
+// Express REST API CORS 설정
+expressApp.use(
+  cors({
+    origin: CLIENT_ORIGIN,
+    methods: ['GET', 'POST'],
+    credentials: true,
+  })
+);
 
 const io = new Server(httpServer, {
   cors: {
