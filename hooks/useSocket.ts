@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useConnectionStore } from "@/store/room/connectionStore";
 import { useParticipantStore } from "@/store/room/participantStore";
+import { useTranscriptStore } from "@/store/room/transcriptStore";
 import type { RoomParticipant } from "@/server/room/room-types";
+import type { TranscriptEntry } from "@/types/transcript";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // useSocket
@@ -196,6 +198,15 @@ export const useSocket = ({
       updateParticipantScreenShare(socketId, enabled);
     });
 
+    // ── transcript-entry: 자막 수신 ──────────────────────────────────────
+    // 다른 참가자가 발화한 자막을 수신 → store에 추가
+    socketInstance.on("transcript-entry", (entry: TranscriptEntry) => {
+      // 타입 가드: text 길이 500자 제한 (서버에서도 검증하지만 클라이언트도 방어)
+      if (typeof entry.text === "string" && entry.text.length <= 500) {
+        useTranscriptStore.getState().addEntry(entry);
+      }
+    });
+
     //
 
     // ── WebRTC 시그널링 수신 → useWebRTC 핸들러로 위임 ───────────────────
@@ -260,10 +271,16 @@ export const useSocket = ({
     socket.current?.emit("ice-candidate", targetId, candidate);
   };
 
+  // 자막 엔트리를 방 전체에 브로드캐스트
+  const sendTranscriptEntry = (entry: TranscriptEntry) => {
+    socket.current?.emit("transcript-entry", entry);
+  };
+
   return {
     socket, // 필요 시 직접 소켓 접근용 (toggle-audio 등)
     sendConnectionProposal, // useWebRTC에 주입
     sendConnectionResponse, // useWebRTC에 주입
     sendNetworkPath, // useWebRTC에 주입
+    sendTranscriptEntry, // useTranscription에 주입
   };
 };

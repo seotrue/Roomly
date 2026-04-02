@@ -13,6 +13,8 @@ import {
 } from "./room/room-service";
 import { normalizeRoomId } from "./room/room-utils";
 import type { JoinRoomPayload } from "./room/room-types";
+import { generateMeetingSummary } from "./summary/summary-service";
+import type { SummaryRequest } from "./summary/summary-types";
 
 const dev = process.env.NODE_ENV !== "production";
 const nextApp = next({ dev });
@@ -59,11 +61,23 @@ nextApp.prepare().then(() => {
     legacyHeaders: false,
   });
 
+  // 요약 생성 API는 비용 보호를 위해 제한: IP당 15분에 5회
+  const summaryLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: "요약 생성 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   // Socket.io 연결 레이트 리밋: IP당 동시 연결 10개 제한
   const connectionLimiter = new Map<string, number>();
 
   // API 레이트 리밋 적용
   expressApp.use("/api/", apiLimiter);
+
+  // JSON 파싱 미들웨어 (transcript 데이터 수신용)
+  expressApp.use(express.json({ limit: "2mb" }));
 
   const io = new Server(httpServer, {
     cors: {
@@ -124,6 +138,31 @@ nextApp.prepare().then(() => {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "방을 생성할 수 없습니다." });
+    }
+  });
+
+  // 요약 생성 API (Gemini API 호출)
+  expressApp.post("/api/summary", summaryLimiter, async (req, res) => {
+    try {
+      const request = req.body as SummaryRequest;
+
+      // 요청 검증
+      if (!request.transcript || !Array.isArray(request.transcript)) {
+        res.status(400).json({
+          success: false,
+          errorMessage: "잘못된 요청입니다.",
+        });
+        return;
+      }
+
+      const result = await generateMeetingSummary(request);
+      res.json(result);
+    } catch (error) {
+      console.error("[api/summary] Error:", error);
+      res.status(500).json({
+        success: false,
+        errorMessage: "요약 생성에 실패했습니다.",
+      });
     }
   });
 
@@ -245,6 +284,25 @@ nextApp.prepare().then(() => {
       const roomId = getSocketRoomId(socket.id);
       if (!roomId) return;
       socket.to(roomId).emit("screen-share-changed", socket.id, enabled);
+    });
+
+    // ── transcript-entry ───────────────────
+    // 자막 엔트리를 같은 방 참가자들에게 브로드캐스트
+    socket.on("transcript-entry", (entry: unknown) => {
+      const roomId = getSocketRoomId(socket.id);
+      if (!roomId) return;
+
+      // 보안: entry 크기 검증 (text 길이 500자 제한)
+      if (
+        entry &&
+        typeof entry === "object" &&
+        "text" in entry &&
+        typeof entry.text === "string" &&
+        entry.text.length <= 500
+      ) {
+        // 발신자 제외한 같은 방 참가자에게 브로드캐스트
+        socket.to(roomId).emit("transcript-entry", entry);
+      }
     });
 
     // ── leave-room ─────────────────────────

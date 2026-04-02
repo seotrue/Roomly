@@ -27,6 +27,15 @@ export {
   useMyMediaState,
 } from './mediaStore';
 
+// 자막 + 요약
+export {
+  useTranscriptStore,
+  useTranscriptEntries,
+  useInterimEntry,
+  useTranscriptionState,
+  useSummaryState,
+} from './transcriptStore';
+
 // ─────────────────────────────────────────────
 // Internal imports for helper functions
 // ─────────────────────────────────────────────
@@ -34,6 +43,7 @@ export {
 import { useConnectionStore } from './connectionStore';
 import { useParticipantStore } from './participantStore';
 import { useMediaStore } from './mediaStore';
+import { useTranscriptStore } from './transcriptStore';
 
 // ─────────────────────────────────────────────
 // 전체 리셋 헬퍼
@@ -54,4 +64,5 @@ export const resetAllRoomStores = () => {
   useConnectionStore.getState().resetConnection();
   useParticipantStore.getState().resetParticipants();
   useMediaStore.getState().resetMedia();
+  useTranscriptStore.getState().resetTranscript();
 };

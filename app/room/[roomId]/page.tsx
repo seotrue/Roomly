@@ -4,11 +4,25 @@ import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useMedia } from "@/hooks/useMedia";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { useSocket } from "@/hooks/useSocket";
+import { useTranscription } from "@/hooks/useTranscription";
 import { useParticipantList } from "@/store/room/participantStore";
 import { useConnectionStore } from "@/store/room/connectionStore";
 import { useMediaStore, useMyMediaState } from "@/store/room/mediaStore";
+import {
+  useTranscriptStore,
+  useTranscriptEntries,
+  useInterimEntry,
+  useTranscriptionState,
+} from "@/store/room/transcriptStore";
+import { requestSummary } from "@/features/room/services/summary";
+import {
+  downloadTranscript,
+  downloadSummary,
+} from "@/features/room/model/transcript-utils";
+import type { MeetingSummary } from "@/types/transcript";
 import "@/styles/room.scss";
-import { useRef } from "react";
+import "@/styles/transcript.scss";
+import { useRef, useState, useEffect } from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RoomPage
@@ -98,6 +112,43 @@ export default function RoomPage() {
 
   const screenStreamRef = useRef<MediaStream | null>(null);
 
+  // ── 자막 + 요약 상태 ────────────────────────────────────────────────────
+  const [isTranscriptEnabled, setIsTranscriptEnabled] = useState(false);
+  const [isTranscriptPanelOpen, setIsTranscriptPanelOpen] = useState(false);
+  const [summary, setSummary] = useState<MeetingSummary | null>(null);
+  const [summaryStatus, setSummaryStatus] = useState<
+    "idle" | "requesting" | "completed" | "error"
+  >("idle");
+
+  // transcript store 구독
+  const entries = useTranscriptEntries();
+  const interimEntry = useInterimEntry();
+  const { language } = useTranscriptionState();
+  const mySocketId = useConnectionStore((state) => state.mySocketId);
+
+  // 자막 패널 자동 스크롤용 ref
+  const transcriptBodyRef = useRef<HTMLDivElement>(null);
+
+  // 자막 추가 시 자동 스크롤
+  useEffect(() => {
+    if (transcriptBodyRef.current && isTranscriptPanelOpen) {
+      transcriptBodyRef.current.scrollTop =
+        transcriptBodyRef.current.scrollHeight;
+    }
+  }, [entries, interimEntry, isTranscriptPanelOpen]);
+
+  // ── 4단계: 자막 인식 (Web Speech API) ──────────────────────────────────
+  useTranscription({
+    enabled: isTranscriptEnabled,
+    language,
+    speakerId: mySocketId,
+    speakerName: userName,
+    onTranscriptEntry: (entry) => {
+      // useSocket에서 반환된 sendTranscriptEntry 사용
+      socket.current?.emit("transcript-entry", entry);
+    },
+  });
+
   // ── 컨트롤 핸들러 ───────────────────────────────────────────────────────
 
   // 마이크 토글: track.enabled 직접 제어 (track.stop()이 아님 — 재활성화 가능)
@@ -131,11 +182,83 @@ export default function RoomPage() {
     socket.current?.emit("toggle-video", !enabled);
   };
 
-  // 나가기: 모든 peer 연결 종료 후 홈으로 이동
-  // useMedia의 cleanup(resetMedia)은 컴포넌트 언마운트 시 자동 실행됨
-  const handleLeave = () => {
-    cleanupAllPeers(); // 모든 RTCPeerConnection.close()
+  // 나가기: 자막이 있으면 요약 생성 제안 → 요약 모달 표시 or 바로 나가기
+  const handleLeave = async () => {
+    const transcriptEntries = useTranscriptStore.getState().entries;
+
+    // 자막이 있고, 3개 이상의 엔트리가 있으면 요약 제안
+    if (transcriptEntries.length >= 3) {
+      const wantSummary = window.confirm(
+        "회의 자막이 기록되었습니다. AI 요약을 생성하시겠습니까?",
+      );
+
+      if (wantSummary) {
+        setSummaryStatus("requesting");
+
+        // 요약 API 호출
+        const meetingDuration = Date.now() - (transcriptEntries[0]?.timestamp ?? Date.now());
+        const participantNames = Array.from(
+          new Set(transcriptEntries.map((e) => e.speakerName)),
+        );
+
+        const result = await requestSummary({
+          transcript: transcriptEntries.map((e) => ({
+            speakerName: e.speakerName,
+            text: e.text,
+            timestamp: e.timestamp,
+          })),
+          language,
+          meetingDuration,
+          participantNames,
+        });
+
+        if (result.success) {
+          // 요약 성공 → 모달 표시
+          setSummary({
+            summary: result.data.summary,
+            keyPoints: result.data.keyPoints,
+            actionItems: result.data.actionItems,
+            duration: meetingDuration,
+            participantNames,
+            generatedAt: Date.now(),
+          });
+          setSummaryStatus("completed");
+          return; // 모달이 열리므로 아직 나가지 않음
+        } else {
+          // 요약 실패 → 에러 표시 후 계속 진행
+          alert(`요약 생성 실패: ${result.errorMessage}`);
+          setSummaryStatus("error");
+        }
+      }
+    }
+
+    // 요약을 원하지 않거나, 실패했거나, 자막이 없으면 바로 나가기
+    cleanupAllPeers();
     router.push("/");
+  };
+
+  // 요약 모달에서 "닫기" 클릭 → 실제로 방 나가기
+  const closeAndLeave = () => {
+    cleanupAllPeers();
+    router.push("/");
+  };
+
+  // 자막 토글
+  const toggleTranscript = () => {
+    setIsTranscriptEnabled((prev) => {
+      const nextEnabled = !prev;
+      // 자막 활성화 시 패널도 자동으로 열기
+      if (nextEnabled) {
+        setIsTranscriptPanelOpen(true);
+      }
+      return nextEnabled;
+    });
+  };
+
+  // 언어 변경
+  const changeLanguage = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const newLanguage = event.target.value as "ko-KR" | "en-US";
+    useTranscriptStore.getState().setLanguage(newLanguage);
   };
 
   // 비디오 그리드 레이아웃 클래스: 참가자 수에 따라 다른 CSS 적용
@@ -198,6 +321,44 @@ export default function RoomPage() {
             <RemoteVideo key={p.id} socketId={p.id} name={p.name} />
           ))}
         </div>
+
+        {/* 자막 패널 (우측 사이드바) */}
+        {isTranscriptPanelOpen && (
+          <aside className="transcript-panel">
+            <div className="transcript-panel__header">
+              <h3>자막</h3>
+              <select value={language} onChange={changeLanguage}>
+                <option value="ko-KR">한국어</option>
+                <option value="en-US">English</option>
+              </select>
+            </div>
+            <div className="transcript-panel__body" ref={transcriptBodyRef}>
+              {entries.length === 0 && !interimEntry && (
+                <p style={{ textAlign: "center", color: "var(--text-secondary)", marginTop: "2rem" }}>
+                  자막이 여기에 표시됩니다.
+                </p>
+              )}
+              {entries.map((entry) => (
+                <div key={entry.id} className="transcript-entry">
+                  <span className="transcript-entry__speaker">
+                    {entry.speakerName}
+                  </span>
+                  <span className="transcript-entry__text">{entry.text}</span>
+                </div>
+              ))}
+              {interimEntry && (
+                <div className="transcript-entry transcript-entry--interim">
+                  <span className="transcript-entry__speaker">
+                    {interimEntry.speakerName}
+                  </span>
+                  <span className="transcript-entry__text">
+                    {interimEntry.text}
+                  </span>
+                </div>
+              )}
+            </div>
+          </aside>
+        )}
       </main>
 
       {/* 하단 컨트롤 바 */}
@@ -239,6 +400,16 @@ export default function RoomPage() {
             <ScreenShareIcon />
           </button>
 
+          {/* 자막 토글 */}
+          <button
+            type="button"
+            className={`controls__btn ${isTranscriptEnabled ? "controls__btn--active" : ""}`}
+            aria-label={isTranscriptEnabled ? "자막 끄기" : "자막 켜기"}
+            onClick={toggleTranscript}
+          >
+            <CaptionIcon />
+          </button>
+
           {/* 나가기: 모든 peer 정리 + 홈 이동 */}
           <button
             type="button"
@@ -257,6 +428,59 @@ export default function RoomPage() {
           </span>
         </div>
       </footer>
+
+      {/* 요약 모달 */}
+      {summaryStatus === "requesting" && (
+        <div className="summary-modal">
+          <div className="summary-modal__content">
+            <div className="summary-modal__loading">
+              <p>AI가 회의 내용을 요약하고 있습니다...</p>
+              <div className="spinner" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {summaryStatus === "completed" && summary && (
+        <div className="summary-modal">
+          <div className="summary-modal__content">
+            <h2>회의 요약</h2>
+            <p>{summary.summary}</p>
+
+            {summary.keyPoints.length > 0 && (
+              <>
+                <h3>핵심 포인트</h3>
+                <ul>
+                  {summary.keyPoints.map((point, idx) => (
+                    <li key={idx}>{point}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {summary.actionItems.length > 0 && (
+              <>
+                <h3>액션 아이템</h3>
+                <ul>
+                  {summary.actionItems.map((item, idx) => (
+                    <li key={idx}>{item}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            <div className="summary-modal__actions">
+              <button onClick={() => downloadSummary(summary, roomId)}>
+                요약 다운로드
+              </button>
+              <button onClick={() => downloadTranscript(entries, roomId)}>
+                자막 다운로드
+              </button>
+              <button onClick={closeAndLeave}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -355,6 +579,14 @@ function HangUpIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08A.99.99 0 0 1 0 12.37c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.66c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" />
+    </svg>
+  );
+}
+
+function CaptionIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/>
     </svg>
   );
 }
