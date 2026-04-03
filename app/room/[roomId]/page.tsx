@@ -139,9 +139,9 @@ export default function RoomPage() {
 
   // ── 4단계: 자막 인식 (Web Speech API) ──────────────────────────────────
   useTranscription({
-    enabled: isTranscriptEnabled,
+    enabled: isTranscriptEnabled && !!mySocketId,
     language,
-    speakerId: mySocketId,
+    speakerId: mySocketId ?? "",
     speakerName: userName,
     onTranscriptEntry: (entry) => {
       // useSocket에서 반환된 sendTranscriptEntry 사용

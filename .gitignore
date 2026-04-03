@@ -43,3 +43,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# practice/experimental files (로컬 개발용, 커밋 제외)
+*-practice.*
+*-practice/
+practice/
+
+# Playwright
+/playwright-report/
+/test-results/

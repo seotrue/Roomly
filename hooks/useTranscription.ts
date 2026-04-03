@@ -23,11 +23,57 @@ import type { TranscriptEntry, SupportedLanguage } from "@/types/transcript";
 //   - onTranscriptEntry 콜백을 ref에 저장하고 useLayoutEffect로 갱신
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Web Speech API 타입 확장 (TypeScript에서 webkit prefix 인식 안 함)
+// Web Speech API 타입 정의 (TypeScript 기본 DOM 타입에 포함되지 않음)
+interface ISpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onstart: ((event: Event) => void) | null;
+  onerror: ((event: ISpeechRecognitionErrorEvent) => void) | null;
+  onend: ((event: Event) => void) | null;
+  onresult: ((event: ISpeechRecognitionEvent) => void) | null;
+}
+
+interface ISpeechRecognitionEvent extends Event {
+  results: ISpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface ISpeechRecognitionResultList {
+  readonly length: number;
+  item(index: number): ISpeechRecognitionResult;
+  [index: number]: ISpeechRecognitionResult;
+}
+
+interface ISpeechRecognitionResult {
+  readonly isFinal: boolean;
+  readonly length: number;
+  item(index: number): ISpeechRecognitionAlternative;
+  [index: number]: ISpeechRecognitionAlternative;
+}
+
+interface ISpeechRecognitionAlternative {
+  readonly transcript: string;
+  readonly confidence: number;
+}
+
+interface ISpeechRecognitionErrorEvent extends Event {
+  readonly error: string;
+  readonly message: string;
+}
+
+interface ISpeechRecognitionConstructor {
+  new (): ISpeechRecognition;
+}
+
 declare global {
   interface Window {
-    SpeechRecognition?: typeof SpeechRecognition;
-    webkitSpeechRecognition?: typeof SpeechRecognition;
+    SpeechRecognition?: ISpeechRecognitionConstructor;
+    webkitSpeechRecognition?: ISpeechRecognitionConstructor;
   }
 }
 
@@ -47,7 +93,7 @@ export const useTranscription = ({
   speakerName,
   onTranscriptEntry,
 }: UseTranscriptionParams) => {
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const enabledRef = useRef(enabled); // 자동 재시작 제어용
 
   // Stale Closure 방지: 콜백 ref
@@ -64,7 +110,7 @@ export const useTranscription = ({
 
   useEffect(() => {
     // ── 브라우저 지원 확인 ────────────────────────────────────────────────
-    const getSpeechRecognition = (): typeof SpeechRecognition | null => {
+    const getSpeechRecognition = (): ISpeechRecognitionConstructor | null => {
       if (typeof window === "undefined") return null;
       return window.SpeechRecognition || window.webkitSpeechRecognition || null;
     };
@@ -93,7 +139,7 @@ export const useTranscription = ({
     recognition.maxAlternatives = 1; // 성능 최적화 (1개 후보만)
 
     // ── 인식 결과 처리 ─────────────────────────────────────────────────────
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: ISpeechRecognitionEvent) => {
       // event.results는 인식 시작부터 누적된 결과 배열
       // event.resultIndex는 이번에 새로 추가된 결과의 시작 인덱스
       const result = event.results[event.resultIndex];
@@ -149,7 +195,7 @@ export const useTranscription = ({
     };
 
     // ── 에러 처리 ──────────────────────────────────────────────────────────
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
       console.error("Speech recognition error:", event.error);
 
       // no-speech, audio-capture 등은 일시적 에러로 간주 → 재시작
@@ -185,6 +231,6 @@ export const useTranscription = ({
 
   return {
     // 필요 시 직접 제어용 (일시 정지 등 추가 기능 구현 시)
-    recognition: recognitionRef.current,
+    stopRecognition: () => recognitionRef.current?.stop(),
   };
 };
