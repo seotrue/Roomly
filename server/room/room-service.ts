@@ -1,6 +1,6 @@
 import { roomStore } from './room-store';
 import { normalizeRoomId, isValidRoomId, isValidUserName, generateRoomId } from './room-utils';
-import type { JoinRoomPayload, JoinRoomResult, RoomParticipant, CreateRoomResult } from './room-types';
+import type { JoinRoomPayload, JoinRoomResult, RoomParticipant, CreateRoomResult } from '@/types/api';
 
 // ─────────────────────────────────────────────────────────────────
 // 보안 설정

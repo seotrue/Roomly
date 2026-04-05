@@ -3,7 +3,7 @@ import { io, Socket } from "socket.io-client";
 import { useConnectionStore } from "@/store/room/connectionStore";
 import { useParticipantStore } from "@/store/room/participantStore";
 import { useTranscriptStore } from "@/store/room/transcriptStore";
-import type { RoomParticipant } from "@/server/room/room-types";
+import type { RoomParticipant } from "@/types/api";
 import type { TranscriptEntry } from "@/types/transcript";
 
 // ─────────────────────────────────────────────────────────────────────────────

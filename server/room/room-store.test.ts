@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { roomStore } from './room-store';
-import type { UserInfo } from './room-types';
+import type { UserInfo } from '@/types/api';
 
 // ---------------------------------------------------------------------------
 // NOTE ON ISOLATION

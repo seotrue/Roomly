@@ -48,7 +48,7 @@ import {
   arePeersInSameRoom,
   handleCreateRoom,
 } from './room-service';
-import type { JoinRoomPayload } from './room-types';
+import type { JoinRoomPayload } from '@/types/api';
 
 // Typed mock helpers — avoids casting at every call site
 const mockHasRoom = vi.mocked(roomStore.hasRoom);

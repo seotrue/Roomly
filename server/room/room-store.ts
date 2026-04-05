@@ -1,4 +1,4 @@
-import type { UserInfo } from './room-types';
+import type { UserInfo } from '@/types/api';
 
 // roomId -> Set<socketId>
 const rooms = new Map<string, Set<string>>();

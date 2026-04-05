@@ -12,9 +12,9 @@ import {
   handleCreateRoom,
 } from "./room/room-service";
 import { normalizeRoomId } from "./room/room-utils";
-import type { JoinRoomPayload } from "./room/room-types";
+import type { JoinRoomPayload } from "@/types/api";
 import { generateMeetingSummary } from "./summary/summary-service";
-import type { SummaryRequest } from "./summary/summary-types";
+import type { SummaryRequest } from "@/types/api";
 
 const dev = process.env.NODE_ENV !== "production";
 const nextApp = next({ dev });

@@ -19,7 +19,7 @@ import {
   handleCreateRoom,
 } from './room/room-service';
 import { normalizeRoomId } from './room/room-utils';
-import type { JoinRoomPayload } from './room/room-types';
+import type { JoinRoomPayload } from '@/types/api';
 
 const PORT = parseInt(process.env.PORT ?? '4000', 10);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:3000';

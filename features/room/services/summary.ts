@@ -2,7 +2,7 @@ import type {
   SummaryRequest,
   SummaryResponse,
   SummarySuccessResponse,
-} from "@/server/summary/summary-types";
+} from "@/types/api";
 
 // ─────────────────────────────────────────────
 // Types

@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useMediaStore } from "@/store/room/mediaStore";
-import type { RoomParticipant } from "@/server/room/room-types";
+import type { RoomParticipant } from "@/types/api";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ICE 서버 설정

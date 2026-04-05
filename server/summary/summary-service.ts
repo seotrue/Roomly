@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { SummaryRequest, SummaryResponse } from "./summary-types";
+import type { SummaryRequest, SummaryResponse } from "@/types/api";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // generateMeetingSummary
