@@ -3,6 +3,20 @@
     "ROOMLY_ENV": "project"
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git push*)",
+            "command": "cd /Users/jinsolseo/WebstormProjects/Roomly && npx tsc --noEmit && npm run lint && npm run build",
+            "statusMessage": "Running pre-push checks (type check, lint, build)...",
+            "timeout": 300
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
