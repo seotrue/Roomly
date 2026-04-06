@@ -40,39 +40,37 @@ export const useTranscriptionPractice = ({
     recognition.lang = language;
     recognition.maxAlternatives = 1;
 
-    console.log("⚙️ 음성 인식 설정 완료");
-
     // 3. 결과 처리
     recognition.onresult = (event: any) => {
       const result = event.results[event.resultIndex];
       const transcript = result[0].transcript.trim();
+      // Store에 저장!
+      const entry: TranscriptEntry = {
+        id: crypto.randomUUID(),
+        speakerId,
+        speakerName,
+        text: transcript,
+        timestamp: Date.now(),
+        isFinal: result.isFinal, // 말이 끝남
+        language,
+      };
 
       if (result.isFinal) {
-        console.log("✅ 확정:", transcript);
-
-        // Store에 저장!
-        const entry: TranscriptEntry = {
-          id: crypto.randomUUID(),
-          speakerId,
-          speakerName,
-          text: transcript,
-          timestamp: Date.now(),
-          isFinal: true,
-          language,
-        };
-
+        // 말이 끝남
         useTranscriptStorePractice.getState().addEntry(entry);
+        useTranscriptStorePractice.getState().setInterimEntry(null);
       } else {
-        console.log("⏳ 임시:", transcript);
+        // 말하는 중
+        useTranscriptStorePractice.getState().setInterimEntry(entry);
       }
     };
 
     recognition.onstart = () => {
-      console.log("🎙️ 음성 인식 시작!");
+      console.log("음성 인식 시작!");
     };
 
     recognition.onerror = (event: any) => {
-      console.error("❌ 에러:", event.error);
+      console.error(" 에러:", event.error);
     };
 
     // 4. 시작
@@ -85,7 +83,6 @@ export const useTranscriptionPractice = ({
         recognitionRef.current.stop();
         recognitionRef.current = null;
       }
-      console.log("🛑 음성 인식 중지");
     };
   }, [enabled, language, speakerId, speakerName]);
 };

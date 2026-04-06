@@ -3,7 +3,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useTranscriptionPractice } from "@/hooks/useTranscription-practice";
-import { useTranscriptEntries } from "@/store/room/transcriptStore-practice";
+import {
+  useTranscriptEntries,
+  useInterimEntry,
+} from "@/store/room/transcriptStore-practice";
+
+import { requestSummary } from "@/features/room/services/summary";
+import type { MeetingSummary } from "@/types/transcript";
 
 export default function RoomPracticePage() {
   const params = useParams();
@@ -13,18 +19,22 @@ export default function RoomPracticePage() {
   const roomId = params.roomId as string;
   const userName = searchParams.get("name") || "익명";
 
-  // ========================================
-  // ✅ Step 1-4: 완료된 코드
-  // ========================================
-
-  // Step 1: 자막 활성화 상태
   const [isTranscriptEnabled, setIsTranscriptEnabled] = useState(false);
   const [isTranscriptPanelOpen, setIsTranscriptPanelOpen] = useState(false);
 
-  // Step 4: Store에서 entries 가져오기
   const entries = useTranscriptEntries();
+  const interimEntry = useInterimEntry();
 
-  // Step 3: useTranscription Hook 호출
+  const transcriptBodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (transcriptBodyRef.current && isTranscriptPanelOpen) {
+      // 맨아래로 스크롤 보내기 위해
+      transcriptBodyRef.current.scrollTop =
+        transcriptBodyRef.current.scrollHeight;
+    }
+  }, [entries, isTranscriptPanelOpen]);
+
   useTranscriptionPractice({
     enabled: isTranscriptEnabled,
     language: "ko-KR",
@@ -54,8 +64,49 @@ export default function RoomPracticePage() {
           </div>
         </div>
 
-        {/* Step 5: 여기에 자막 패널 작성 */}
-
+        {isTranscriptPanelOpen && (
+          <div className="transcript-panel">
+            <div className="transcript-panel__header">
+              <h3>자막</h3>
+              <button
+                type="button"
+                className="transcript-panel__close"
+                onClick={() => setIsTranscriptPanelOpen(false)}
+              ></button>
+            </div>
+            <div className="transcript-panel__body" ref={transcriptBodyRef}>
+              {entries.length === 0 && (
+                <p
+                  style={{
+                    textAlign: "center",
+                    color: "var(--text-secondary)",
+                    marginTop: "2rem",
+                  }}
+                >
+                  자막이 여기에 표시됩니다.
+                </p>
+              )}
+              {entries.map((entry) => (
+                <div key={entry.id} className="transcript-entry">
+                  <span className="transcript-entry__speaker">
+                    {entry.speakerName}
+                  </span>
+                  <span className="transcript-entry__text">{entry.text}</span>
+                </div>
+              ))}
+              {interimEntry && (
+                <div className="transcript-entry transcript-entry--interim">
+                  <span className="transcript-entry__speaker">
+                    {interimEntry.speakerName}
+                  </span>
+                  <span className="transcript-entry__text">
+                    {interimEntry.text}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* 하단 컨트롤 바 */}
@@ -95,7 +146,13 @@ export default function RoomPracticePage() {
 // 아이콘 컴포넌트들
 function CaptionIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+    >
       <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth="2" />
       <path d="M7 15h4M13 15h4" strokeWidth="2" strokeLinecap="round" />
     </svg>

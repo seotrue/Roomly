@@ -4,7 +4,9 @@
       "Bash(bash \"/Users/jinsolseo/.claude/plugins/cache/omc/oh-my-claudecode/4.9.0/scripts/setup-progress.sh\" resume)",
       "Bash(npm run:*)",
       "Bash(git push:*)",
-      "Bash(npm install @google/generative-ai)"
+      "Bash(npm install @google/generative-ai)",
+      "mcp__plugin_oh-my-claudecode_t__lsp_diagnostics",
+      "Bash(npx tsc:*)"
     ]
   },
   "enabledPlugins": {}
